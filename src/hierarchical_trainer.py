@@ -137,14 +137,14 @@ class HierarchicalTrainer:
     
     def _compute_hierarchical_loss(self, 
                                   logits_list: List[torch.Tensor],
-                                  labels_dict: Dict,
+                                  batch: Dict,
                                   log_vars: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, Dict]:
         """
         Compute hierarchical loss with optional uncertainty weighting
         
         Args:
             logits_list: List of logits for each level
-            labels_dict: Dictionary of labels for each level
+            batch: Batch dictionary with hierarchical labels
             log_vars: Optional log variance parameters for uncertainty weighting
             
         Returns:
@@ -155,11 +155,13 @@ class HierarchicalTrainer:
         level_accs = []
         
         for i, level in enumerate(self.taxonomic_levels):
-            # Get labels for this level
-            labels = torch.stack([
-                torch.tensor(sample['output'][level]['encoded_label'], dtype=torch.long)
-                for sample in labels_dict
-            ]).to(self.device)
+            # Get labels for this level from batch
+            # The batch['output'] is a dict where each level contains dicts with 'encoded_label'
+            # When batched by DataLoader, this becomes a list of encoded labels
+            if isinstance(batch['output'][level]['encoded_label'], list):
+                labels = torch.tensor(batch['output'][level]['encoded_label'], dtype=torch.long).to(self.device)
+            else:
+                labels = batch['output'][level]['encoded_label'].to(self.device)
             
             # Compute loss
             loss = self.criterion(logits_list[i], labels)
