@@ -29,7 +29,7 @@ preprocessing:
 
 training:
   batch_size: 16  # Small batch
-  learning_rate: 5e-5
+  learning_rate: 0.00005  # 5e-5
   weight_decay: 0.01
   warmup_steps: 10
   max_epochs: 2  # Just 2 epochs for testing
