@@ -23,6 +23,7 @@ from src.data import load_fold_data, prepare_data_for_training, create_data_load
 from src.preprocessing import create_tokenizer
 from src.model import create_model
 from src.trainer import Trainer
+from src.hierarchical_trainer import HierarchicalTrainer
 
 # Setup logging
 logging.basicConfig(
@@ -111,25 +112,74 @@ def train_fold(fold: int, config: dict, paths: dict):
         config['model']['vocab_size'] = len(tokenizer.vocab)
         logger.info(f"Vocabulary size: {len(tokenizer.vocab)}")
     
+    # Determine if hierarchical or single-rank
+    is_hierarchical = config['model'].get('classification_type', 'single') == 'hierarchical'
+    taxonomic_levels = config['model'].get('taxonomic_levels', ['species'])
+    
+    # For single-rank, determine which level
+    if not is_hierarchical and len(taxonomic_levels) == 1:
+        target_level = taxonomic_levels[0]
+    else:
+        target_level = None
+    
     # Create data loaders
-    train_loader, val_loader = create_data_loaders(
-        train_data, val_data, tokenizer,
-        batch_size=config['training']['batch_size'],
-        max_length=config['preprocessing']['max_length'],
-        num_workers=config['training']['num_workers']
-    )
+    if is_hierarchical:
+        # Use DataFrames directly for hierarchical
+        train_loader, val_loader = create_data_loaders(
+            train_df, val_df, tokenizer,
+            batch_size=config['training']['batch_size'],
+            max_length=config['preprocessing']['max_length'],
+            num_workers=config['training']['num_workers'],
+            hierarchical=True,
+            taxonomic_levels=taxonomic_levels
+        )
+        # Get num_classes from dataset
+        num_classes = train_loader.dataset.num_classes_per_level
+    else:
+        # Prepare data for single-rank
+        if target_level and target_level != 'species':
+            # For non-species single ranks, use the specific column
+            train_data = {
+                'sequences': train_df['sequence'].tolist(),
+                'labels': train_df[target_level].tolist(),
+                'num_sequences': len(train_df),
+                'num_classes': train_df[target_level].nunique()
+            }
+            val_data = {
+                'sequences': val_df['sequence'].tolist(),
+                'labels': val_df[target_level].tolist(),
+                'num_sequences': len(val_df),
+                'num_classes': val_df[target_level].nunique()
+            }
+        else:
+            # Default species-level (genus_species)
+            train_data = prepare_data_for_training(train_df)
+            val_data = prepare_data_for_training(val_df)
+        
+        train_loader, val_loader = create_data_loaders(
+            train_data, val_data, tokenizer,
+            batch_size=config['training']['batch_size'],
+            max_length=config['preprocessing']['max_length'],
+            num_workers=config['training']['num_workers'],
+            hierarchical=False
+        )
+        num_classes = train_loader.dataset.num_classes
     
     # Create model
     logger.info("Creating model...")
     model = create_model(
         vocab_size=config['model']['vocab_size'],
-        num_classes=train_loader.dataset.num_classes,
+        num_classes=num_classes,
         config=config
     )
     
-    # Create output directory
+    # Create output directory with model type
     experiment_name = f"{config['experiment']['union_type']}_{config['experiment']['fold_type']}_{config['experiment']['dataset_size']}"
-    output_dir = Path(paths['models_dir']) / experiment_name / f"fold_{fold}"
+    if is_hierarchical:
+        model_type = "hierarchical"
+    else:
+        model_type = f"single_{target_level}" if target_level else "single_species"
+    output_dir = Path(paths['models_dir']) / experiment_name / f"fold_{fold}" / model_type
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Save config
@@ -138,14 +188,33 @@ def train_fold(fold: int, config: dict, paths: dict):
         json.dump(config, f, indent=2)
     
     # Create trainer
-    trainer = Trainer(
-        model=model,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        config=config,
-        output_dir=output_dir,
-        fold=fold
-    )
+    if is_hierarchical:
+        # Get label encoders and vocab for hierarchical
+        label_encoders = train_loader.dataset.label_encoders if hasattr(train_loader.dataset, 'label_encoders') else None
+        vocab = tokenizer.vocab if hasattr(tokenizer, 'vocab') else None
+        
+        trainer = HierarchicalTrainer(
+            model=model,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            config=config,
+            output_dir=output_dir,
+            fold=fold,
+            taxonomic_levels=taxonomic_levels,
+            label_encoders=label_encoders,
+            vocab=vocab,
+            l1_lambda=config['model'].get('l1_lambda', 1e-4),
+            use_uncertainty_weighting=config['model'].get('use_uncertainty_weighting', False)
+        )
+    else:
+        trainer = Trainer(
+            model=model,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            config=config,
+            output_dir=output_dir,
+            fold=fold
+        )
     
     # Train
     start_time = datetime.now()
