@@ -176,7 +176,17 @@ class Trainer:
             'scheduler_state_dict': self.scheduler.state_dict(),
             'metrics': metrics,
             'config': self.config,
-            'fold': self.fold
+            'fold': self.fold,
+            # Save label mappings
+            'label_to_idx': self.train_loader.dataset.label_to_idx,
+            'idx_to_label': self.train_loader.dataset.idx_to_label,
+            # Save tokenizer vocab
+            'tokenizer_vocab': self.train_loader.dataset.tokenizer.vocab if hasattr(self.train_loader.dataset.tokenizer, 'vocab') else None,
+            'tokenizer_config': {
+                'type': self.config['preprocessing']['tokenizer'],
+                'kmer_size': self.config['preprocessing'].get('kmer_size'),
+                'stride': self.config['preprocessing'].get('stride')
+            }
         }
         
         # Save regular checkpoint

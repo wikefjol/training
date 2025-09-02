@@ -6,8 +6,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Union
 import logging
+from .heads import SingleClassificationHead, HierarchicalClassificationHead
 
 logger = logging.getLogger(__name__)
 
@@ -106,15 +107,20 @@ class TransformerBlock(nn.Module):
 class SequenceClassificationModel(nn.Module):
     """BERT-like model for sequence classification"""
     
-    def __init__(self, vocab_size: int, num_classes: int,
+    def __init__(self, vocab_size: int, 
+                 num_classes: Union[int, List[int]],
                  hidden_size: int = 768,
                  num_hidden_layers: int = 12,
                  num_attention_heads: int = 12,
                  intermediate_size: int = 3072,
                  hidden_dropout_prob: float = 0.1,
                  attention_probs_dropout_prob: float = 0.1,
-                 max_position_embeddings: int = 512):
+                 max_position_embeddings: int = 512,
+                 hierarchical: bool = False,
+                 hierarchical_dropout: float = 0.3):
         super().__init__()
+        
+        self.hierarchical = hierarchical
         
         self.config = {
             'vocab_size': vocab_size,
@@ -125,7 +131,8 @@ class SequenceClassificationModel(nn.Module):
             'intermediate_size': intermediate_size,
             'hidden_dropout_prob': hidden_dropout_prob,
             'attention_probs_dropout_prob': attention_probs_dropout_prob,
-            'max_position_embeddings': max_position_embeddings
+            'max_position_embeddings': max_position_embeddings,
+            'hierarchical': hierarchical
         }
         
         # Embeddings
@@ -143,9 +150,20 @@ class SequenceClassificationModel(nn.Module):
             for _ in range(num_hidden_layers)
         ])
         
-        # Classification head
+        # Pooler
         self.pooler = nn.Linear(hidden_size, hidden_size)
-        self.classifier = nn.Linear(hidden_size, num_classes)
+        
+        # Classification head
+        if hierarchical:
+            if not isinstance(num_classes, list):
+                raise ValueError("For hierarchical classification, num_classes must be a list")
+            self.classifier = HierarchicalClassificationHead(
+                hidden_size, num_classes, hierarchical_dropout
+            )
+        else:
+            if isinstance(num_classes, list):
+                num_classes = num_classes[-1]  # Use species-level for single classification
+            self.classifier = SingleClassificationHead(hidden_size, num_classes)
         
         # Initialize weights
         self.init_weights()
@@ -178,7 +196,8 @@ class SequenceClassificationModel(nn.Module):
             attention_mask: Attention mask [batch_size, seq_length]
             
         Returns:
-            Logits [batch_size, num_classes]
+            For single classification: Logits [batch_size, num_classes]
+            For hierarchical: List of logits for each level
         """
         batch_size, seq_length = input_ids.shape
         
@@ -209,19 +228,22 @@ class SequenceClassificationModel(nn.Module):
         return logits
 
 
-def create_model(vocab_size: int, num_classes: int, config: Dict):
+def create_model(vocab_size: int, num_classes: Union[int, List[int]], config: Dict):
     """
     Create model from config
     
     Args:
         vocab_size: Vocabulary size
-        num_classes: Number of output classes
+        num_classes: Number of output classes (int for single, list for hierarchical)
         config: Configuration dictionary
         
     Returns:
         Model instance
     """
     model_config = config['model']
+    
+    # Determine if hierarchical
+    is_hierarchical = model_config.get('classification_type', 'single') == 'hierarchical'
     
     model = SequenceClassificationModel(
         vocab_size=vocab_size,
@@ -232,7 +254,17 @@ def create_model(vocab_size: int, num_classes: int, config: Dict):
         intermediate_size=model_config['intermediate_size'],
         hidden_dropout_prob=model_config['hidden_dropout_prob'],
         attention_probs_dropout_prob=model_config['attention_probs_dropout_prob'],
-        max_position_embeddings=model_config['max_position_embeddings']
+        max_position_embeddings=model_config['max_position_embeddings'],
+        hierarchical=is_hierarchical,
+        hierarchical_dropout=model_config.get('hierarchical_dropout', 0.3)
     )
+    
+    # Add uncertainty weighting parameters if specified
+    if is_hierarchical and model_config.get('use_uncertainty_weighting', False):
+        if isinstance(num_classes, list):
+            num_levels = len(num_classes)
+        else:
+            num_levels = len(model_config.get('taxonomic_levels', ['species']))
+        model.log_vars = nn.Parameter(torch.zeros(num_levels))
     
     return model
