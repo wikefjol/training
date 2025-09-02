@@ -1,0 +1,45 @@
+# Environment
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Data (should be on mimer)
+data/
+*.csv
+*.tsv
+*.fasta
+
+# Model outputs
+models/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+# Logs
+logs/
+*.log
+training.log
+tensorboard/
+wandb/
+
+# Results
+kfold_summary.json
+all_folds_results.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store

@@ -1,0 +1,63 @@
+# Training Configuration
+# Machine-specific paths are in .env
+# This file contains only training parameters
+
+experiment:
+  # Which experiment to run
+  union_type: "standard"  # "standard" (a+b+d) or "conservative" (a+b+c)
+  fold_type: "exp1_sequence_fold"  # "exp1_sequence_fold" or "exp2_species_fold"
+  dataset_size: "debug_5genera_10fold"  # "debug_5genera_10fold" or "full_10fold"
+  
+  # K-fold settings
+  num_folds: 10
+  folds_to_train: [1]  # List of folds to train, or "all" for all folds
+  
+model:
+  # Architecture
+  type: "bert"  # Simple BERT-like transformer
+  vocab_size: 1024  # Will be set dynamically based on data
+  hidden_size: 256  # 256 for debug, 768 for full
+  num_hidden_layers: 4  # 4 for debug, 12 for full
+  num_attention_heads: 4  # 4 for debug, 12 for full
+  intermediate_size: 1024  # 4x hidden_size
+  hidden_dropout_prob: 0.1
+  attention_probs_dropout_prob: 0.1
+  max_position_embeddings: 512
+  
+preprocessing:
+  # Tokenization
+  tokenizer: "kmer"  # "kmer" or "character"
+  kmer_size: 6
+  stride: 1
+  max_length: 512
+  padding: "max_length"
+  truncation: true
+  
+training:
+  # Optimization
+  batch_size: 32
+  learning_rate: 5e-5
+  weight_decay: 0.01
+  warmup_steps: 500
+  max_epochs: 10
+  
+  # Early stopping
+  patience: 3
+  min_delta: 0.001
+  monitor: "val_accuracy"
+  
+  # Checkpointing
+  save_best_only: true
+  save_frequency: 1  # Save every N epochs
+  
+  # Hardware
+  device: "cuda"  # "cuda" or "cpu"
+  num_workers: 4
+  mixed_precision: false  # Set to true for faster training on compatible GPUs
+  
+  # Logging
+  log_frequency: 100  # Log every N steps
+  verbose: true
+  
+# Random seed for reproducibility
+seed: 42
