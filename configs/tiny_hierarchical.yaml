@@ -48,7 +48,7 @@ training:
   save_best_only: true
   save_frequency: 1
   
-  device: "cpu"
+  device: "cuda"
   num_workers: 0
   mixed_precision: false
   
