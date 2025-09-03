@@ -82,9 +82,12 @@ def train_fold(fold: int, config: dict, paths: dict):
     logger.info(f"Starting training for fold {fold}")
     logger.info(f"Configuration: {json.dumps(config['experiment'], indent=2)}")
     
-    # Build data path
-    data_path = Path(paths['experiments_dir']) / config['experiment']['fold_type'] / \
-                config['experiment']['dataset_size'] / f"{config['experiment']['union_type']}.csv"
+    # Build experiment base path
+    experiment_base = Path(paths['experiments_dir']) / config['experiment']['fold_type'] / \
+                      config['experiment']['dataset_size']
+    
+    # Data is now in data/ subdirectory
+    data_path = experiment_base / 'data' / f"{config['experiment']['union_type']}.csv"
     
     if not data_path.exists():
         raise FileNotFoundError(f"Data file not found: {data_path}")
@@ -173,16 +176,31 @@ def train_fold(fold: int, config: dict, paths: dict):
         config=config
     )
     
-    # Create output directory with model type
-    experiment_name = f"{config['experiment']['union_type']}_{config['experiment']['fold_type']}_{config['experiment']['dataset_size']}"
+    # Create output directory in the experiment folder structure
     if is_hierarchical:
         model_type = "hierarchical"
     else:
         model_type = f"single_{target_level}" if target_level else "single_species"
-    output_dir = Path(paths['models_dir']) / experiment_name / f"fold_{fold}" / model_type
+    
+    # Models go under experiments/exp_type/dataset/models/union_type/fold_N/model_type
+    output_dir = experiment_base / 'models' / config['experiment']['union_type'] / f"fold_{fold}" / model_type
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Save config
+    # Save experiment metadata at experiment level (only once)
+    experiment_info_path = experiment_base / 'experiment_info.json'
+    if not experiment_info_path.exists():
+        experiment_info = {
+            'experiment_type': config['experiment']['fold_type'],
+            'dataset_size': config['experiment']['dataset_size'],
+            'union_types': ['standard', 'conservative'],
+            'num_folds': config['experiment']['num_folds'],
+            'created': datetime.now().isoformat(),
+            'description': f"K-fold cross-validation experiment with {config['experiment']['fold_type'].replace('_', ' ')}"
+        }
+        with open(experiment_info_path, 'w') as f:
+            json.dump(experiment_info, f, indent=2)
+    
+    # Save config in model directory
     config_path = output_dir / 'config.json'
     with open(config_path, 'w') as f:
         json.dump(config, f, indent=2)
