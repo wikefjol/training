@@ -62,13 +62,11 @@ class FungalSequenceDataset(Dataset):
         
         # Use provided encoder or create new one
         if label_encoder:
-            logger.info(f"Using provided encoder with {len(label_encoder.label_to_index)} classes")
             self.label_encoder = label_encoder
             self.label_to_idx = label_encoder.label_to_index
             self.idx_to_label = label_encoder.index_to_label
             self.num_classes = len(self.label_to_idx)
         else:
-            logger.info("No encoder provided, creating from training data")
             # Fallback: create from data (old behavior)
             unique_labels = sorted(set(labels))
             self.label_to_idx = {label: idx for idx, label in enumerate(unique_labels)}
@@ -82,14 +80,6 @@ class FungalSequenceDataset(Dataset):
             unknown_count = sum(1 for label in labels if label_encoder.encode(label) is None)
             if unknown_count > 0:
                 logger.warning(f"Dataset has {unknown_count} samples with unknown labels")
-                # Debug: show first few unknown labels
-                first_unknowns = [label for label in labels[:10] if label_encoder.encode(label) is None]
-                logger.warning(f"First unknown labels: {first_unknowns[:3]}")
-                # Debug: check if encoder has these labels
-                if first_unknowns:
-                    test_label = first_unknowns[0]
-                    has_label = test_label in label_encoder.label_to_index
-                    logger.warning(f"Test label '{test_label}' in encoder: {has_label}")
         
         logger.info(f"Dataset created with {len(sequences)} sequences, {self.num_classes} classes")
     
@@ -282,8 +272,8 @@ def prepare_data_for_training(df: pd.DataFrame) -> Dict:
         if col not in df.columns:
             raise ValueError(f"Missing required column: {col}")
     
-    # Create species-level labels
-    df['label'] = df['genus'] + '_' + df['species']
+    # Use species labels directly (to match encoder format)
+    df['label'] = df['species']
     
     # Remove rows with missing data
     df = df.dropna(subset=['sequence', 'label'])
