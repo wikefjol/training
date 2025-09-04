@@ -82,6 +82,14 @@ class FungalSequenceDataset(Dataset):
             unknown_count = sum(1 for label in labels if label_encoder.encode(label) is None)
             if unknown_count > 0:
                 logger.warning(f"Dataset has {unknown_count} samples with unknown labels")
+                # Debug: show first few unknown labels
+                first_unknowns = [label for label in labels[:10] if label_encoder.encode(label) is None]
+                logger.warning(f"First unknown labels: {first_unknowns[:3]}")
+                # Debug: check if encoder has these labels
+                if first_unknowns:
+                    test_label = first_unknowns[0]
+                    has_label = test_label in label_encoder.label_to_index
+                    logger.warning(f"Test label '{test_label}' in encoder: {has_label}")
         
         logger.info(f"Dataset created with {len(sequences)} sequences, {self.num_classes} classes")
     
