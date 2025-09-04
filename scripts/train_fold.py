@@ -102,9 +102,9 @@ def train_fold(fold: int, config: dict, paths: dict):
     # Load fold-specific label encoders
     encoder_path = data_path.parent / f"label_encoders_{config['experiment']['union_type']}_fold{fold}.json"
     label_encoders = None
+    encoder_dicts = None
     if encoder_path.exists():
         logger.info(f"Loading label encoders from {encoder_path}")
-        import json
         from src.data import LabelEncoder
         
         with open(encoder_path, 'r') as f:
@@ -147,7 +147,7 @@ def train_fold(fold: int, config: dict, paths: dict):
         target_level = None
     
     # Convert encoder dicts to LabelEncoder objects if they exist
-    if label_encoders is not None and encoder_dicts:
+    if encoder_dicts is not None:
         if is_hierarchical:
             # Create LabelEncoder objects for each level
             label_encoders = {
