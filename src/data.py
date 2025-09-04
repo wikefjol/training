@@ -62,11 +62,13 @@ class FungalSequenceDataset(Dataset):
         
         # Use provided encoder or create new one
         if label_encoder:
+            logger.info(f"Using provided encoder with {len(label_encoder.label_to_index)} classes")
             self.label_encoder = label_encoder
             self.label_to_idx = label_encoder.label_to_index
             self.idx_to_label = label_encoder.index_to_label
             self.num_classes = len(self.label_to_idx)
         else:
+            logger.info("No encoder provided, creating from training data")
             # Fallback: create from data (old behavior)
             unique_labels = sorted(set(labels))
             self.label_to_idx = {label: idx for idx, label in enumerate(unique_labels)}
