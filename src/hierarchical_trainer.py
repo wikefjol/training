@@ -212,6 +212,10 @@ class HierarchicalTrainer:
         
         pbar = tqdm(self.train_loader, desc=f"Epoch {self.current_epoch + 1}")
         for batch_idx, batch in enumerate(pbar):
+            # Skip None batches (filtered out by collate_fn)
+            if batch is None:
+                continue
+                
             # Move batch to device
             input_ids = batch['input_ids'].to(self.device)
             attention_mask = batch['attention_mask'].to(self.device)
@@ -260,12 +264,21 @@ class HierarchicalTrainer:
             pbar.set_postfix(postfix)
         
         # Calculate epoch metrics
-        epoch_metrics = {
-            'loss': total_loss / total_samples,
-            'level_losses': {lvl: level_losses[lvl] / total_samples for lvl in self.taxonomic_levels},
-            'level_accs': {lvl: level_correct[lvl] / total_samples for lvl in self.taxonomic_levels},
-            'mean_acc': np.mean([level_correct[lvl] / total_samples for lvl in self.taxonomic_levels])
-        }
+        if total_samples == 0:
+            # Handle case where all batches were filtered out
+            epoch_metrics = {
+                'loss': 0.0,
+                'level_losses': {lvl: 0.0 for lvl in self.taxonomic_levels},
+                'level_accs': {lvl: 0.0 for lvl in self.taxonomic_levels},
+                'mean_acc': 0.0
+            }
+        else:
+            epoch_metrics = {
+                'loss': total_loss / total_samples,
+                'level_losses': {lvl: level_losses[lvl] / total_samples for lvl in self.taxonomic_levels},
+                'level_accs': {lvl: level_correct[lvl] / total_samples for lvl in self.taxonomic_levels},
+                'mean_acc': np.mean([level_correct[lvl] / total_samples for lvl in self.taxonomic_levels])
+            }
         
         return epoch_metrics
     
@@ -280,6 +293,10 @@ class HierarchicalTrainer:
         
         with torch.no_grad():
             for batch in tqdm(self.val_loader, desc="Validating", leave=False):
+                # Skip None batches (filtered out by collate_fn)
+                if batch is None:
+                    continue
+                    
                 input_ids = batch['input_ids'].to(self.device)
                 attention_mask = batch['attention_mask'].to(self.device)
                 
@@ -306,12 +323,21 @@ class HierarchicalTrainer:
                     level_correct[level] += metrics['level_accs'][i] * batch_size
         
         # Calculate validation metrics
-        val_metrics = {
-            'loss': total_loss / total_samples,
-            'level_losses': {lvl: level_losses[lvl] / total_samples for lvl in self.taxonomic_levels},
-            'level_accs': {lvl: level_correct[lvl] / total_samples for lvl in self.taxonomic_levels},
-            'mean_acc': np.mean([level_correct[lvl] / total_samples for lvl in self.taxonomic_levels])
-        }
+        if total_samples == 0:
+            # Handle case where all batches were filtered out
+            val_metrics = {
+                'loss': 0.0,
+                'level_losses': {lvl: 0.0 for lvl in self.taxonomic_levels},
+                'level_accs': {lvl: 0.0 for lvl in self.taxonomic_levels},
+                'mean_acc': 0.0
+            }
+        else:
+            val_metrics = {
+                'loss': total_loss / total_samples,
+                'level_losses': {lvl: level_losses[lvl] / total_samples for lvl in self.taxonomic_levels},
+                'level_accs': {lvl: level_correct[lvl] / total_samples for lvl in self.taxonomic_levels},
+                'mean_acc': np.mean([level_correct[lvl] / total_samples for lvl in self.taxonomic_levels])
+            }
         
         return val_metrics
     
