@@ -203,7 +203,7 @@ def train_fold(fold: int, config: dict, paths: dict):
             max_length=config['preprocessing']['max_length'],
             num_workers=config['training']['num_workers'],
             hierarchical=False,
-            label_encoders=label_encoders  # Pass pre-built encoder
+            label_encoder=label_encoders  # Pass single pre-built encoder
         )
         num_classes = train_loader.dataset.num_classes
     

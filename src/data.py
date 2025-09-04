@@ -298,7 +298,8 @@ def create_data_loaders(train_data, val_data, tokenizer,
                        batch_size: int = 32, max_length: int = 512,
                        num_workers: int = 4, hierarchical: bool = False,
                        taxonomic_levels: List[str] = None, 
-                       label_encoders: Optional[Union[LabelEncoder, Dict[str, LabelEncoder]]] = None) -> Tuple[DataLoader, DataLoader]:
+                       label_encoder: Optional[LabelEncoder] = None,
+                       label_encoders: Optional[Dict[str, LabelEncoder]] = None) -> Tuple[DataLoader, DataLoader]:
     """
     Create DataLoaders for training and validation
     
@@ -311,6 +312,8 @@ def create_data_loaders(train_data, val_data, tokenizer,
         num_workers: Number of data loading workers
         hierarchical: Whether to use hierarchical classification
         taxonomic_levels: List of taxonomic levels for hierarchical
+        label_encoder: Single LabelEncoder for single-level classification
+        label_encoders: Dict of LabelEncoders for hierarchical classification
         
     Returns:
         train_loader, val_loader
@@ -349,7 +352,7 @@ def create_data_loaders(train_data, val_data, tokenizer,
             train_data['labels'],
             tokenizer,
             max_length,
-            label_encoder=label_encoders  # Pass pre-built encoder
+            label_encoder=label_encoder  # Pass single pre-built encoder
         )
         
         val_dataset = FungalSequenceDataset(
@@ -357,7 +360,7 @@ def create_data_loaders(train_data, val_data, tokenizer,
             val_data['labels'],
             tokenizer,
             max_length,
-            label_encoder=label_encoders  # Use same encoder for validation
+            label_encoder=label_encoder  # Use same encoder for validation
         )
     
     # Create loaders with collate function to filter None samples
