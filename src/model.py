@@ -8,7 +8,10 @@ import torch.nn.functional as F
 import math
 from typing import Optional, Dict, List, Union
 import logging
-from .heads import SingleClassificationHead, HierarchicalClassificationHead
+try:
+    from .heads import SingleClassificationHead, HierarchicalClassificationHead
+except ImportError:
+    from heads import SingleClassificationHead, HierarchicalClassificationHead
 
 logger = logging.getLogger(__name__)
 

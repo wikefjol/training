@@ -99,6 +99,27 @@ def train_fold(fold: int, config: dict, paths: dict):
         data_path, fold, config['experiment']['fold_type']
     )
     
+    # Load fold-specific label encoders
+    encoder_path = data_path.parent / f"label_encoders_{config['experiment']['union_type']}_fold{fold}.json"
+    label_encoders = None
+    if encoder_path.exists():
+        logger.info(f"Loading label encoders from {encoder_path}")
+        import json
+        from src.data import LabelEncoder
+        
+        with open(encoder_path, 'r') as f:
+            encoder_dicts = json.load(f)
+        
+        # Log unknown label statistics
+        for level, enc_dict in encoder_dicts.items():
+            if enc_dict.get('num_unknown_in_val', 0) > 0:
+                logger.warning(f"  {level}: {enc_dict['num_unknown_in_val']} unknown labels in validation")
+                if 'example_unknown' in enc_dict:
+                    logger.debug(f"    Examples: {enc_dict['example_unknown'][:3]}")
+    else:
+        logger.warning(f"Label encoder file not found: {encoder_path}")
+        logger.warning("Will build encoders from training data (old behavior)")
+    
     # Prepare data
     train_data = prepare_data_for_training(train_df)
     val_data = prepare_data_for_training(val_df)
@@ -125,6 +146,22 @@ def train_fold(fold: int, config: dict, paths: dict):
     else:
         target_level = None
     
+    # Convert encoder dicts to LabelEncoder objects if they exist
+    if label_encoders is not None and encoder_dicts:
+        if is_hierarchical:
+            # Create LabelEncoder objects for each level
+            label_encoders = {
+                level: LabelEncoder.from_dict(encoder_dicts[level])
+                for level in taxonomic_levels
+                if level in encoder_dicts
+            }
+        else:
+            # For single-rank, just get the encoder for the target level
+            if target_level and target_level in encoder_dicts:
+                label_encoders = LabelEncoder.from_dict(encoder_dicts[target_level])
+            elif 'species' in encoder_dicts:
+                label_encoders = LabelEncoder.from_dict(encoder_dicts['species'])
+    
     # Create data loaders
     if is_hierarchical:
         # Use DataFrames directly for hierarchical
@@ -134,7 +171,8 @@ def train_fold(fold: int, config: dict, paths: dict):
             max_length=config['preprocessing']['max_length'],
             num_workers=config['training']['num_workers'],
             hierarchical=True,
-            taxonomic_levels=taxonomic_levels
+            taxonomic_levels=taxonomic_levels,
+            label_encoders=label_encoders  # Pass pre-built encoders
         )
         # Get num_classes from dataset
         num_classes = train_loader.dataset.num_classes_per_level
@@ -164,7 +202,8 @@ def train_fold(fold: int, config: dict, paths: dict):
             batch_size=config['training']['batch_size'],
             max_length=config['preprocessing']['max_length'],
             num_workers=config['training']['num_workers'],
-            hierarchical=False
+            hierarchical=False,
+            label_encoders=label_encoders  # Pass pre-built encoder
         )
         num_classes = train_loader.dataset.num_classes
     
