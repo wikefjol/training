@@ -174,7 +174,12 @@ class HierarchicalFungalDataset(Dataset):
         
         logger.info(f"Hierarchical dataset: {len(self.df)} sequences")
         for level in self.taxonomic_levels:
-            logger.info(f"  {level}: {self.label_encoders[level]['num_classes']} classes")
+            if isinstance(self.label_encoders[level], LabelEncoder):
+                num_classes = len(self.label_encoders[level].label_to_index)
+            else:
+                # Old dict format
+                num_classes = self.label_encoders[level]['num_classes']
+            logger.info(f"  {level}: {num_classes} classes")
     
     def __len__(self):
         return len(self.df)

@@ -96,6 +96,10 @@ class Trainer:
         progress_bar = tqdm(self.train_loader, desc=f"Training Epoch {self.current_epoch + 1}")
         
         for batch_idx, batch in enumerate(progress_bar):
+            # Skip None batches (from filtering unknown labels)
+            if batch is None:
+                continue
+                
             # Move to device
             input_ids = batch['input_ids'].to(self.device)
             attention_mask = batch['attention_mask'].to(self.device)
@@ -142,6 +146,8 @@ class Trainer:
         
         with torch.no_grad():
             for batch in tqdm(self.val_loader, desc="Validating"):
+                if batch is None:
+                    continue
                 # Move to device
                 input_ids = batch['input_ids'].to(self.device)
                 attention_mask = batch['attention_mask'].to(self.device)
