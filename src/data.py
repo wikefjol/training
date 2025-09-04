@@ -75,9 +75,9 @@ class FungalSequenceDataset(Dataset):
             # Create encoder object for consistency
             self.label_encoder = LabelEncoder(labels)
         
-        # Count how many labels would be unknown
+        # Count how many samples would be unknown
         if label_encoder:
-            unknown_count = sum(1 for label in set(labels) if label_encoder.encode(label) is None)
+            unknown_count = sum(1 for label in labels if label_encoder.encode(label) is None)
             if unknown_count > 0:
                 logger.warning(f"Dataset has {unknown_count} samples with unknown labels")
         
