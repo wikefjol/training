@@ -426,8 +426,8 @@ class HierarchicalTrainer:
             # Save checkpoint for every epoch (systematic saving)
             self.save_checkpoint(epoch_metrics)
             
-            # Early stopping
-            if self.patience_counter >= self.config['training']['patience']:
+            # Early stopping (disabled if patience=0)
+            if self.config['training']['patience'] > 0 and self.patience_counter >= self.config['training']['patience']:
                 logger.info(f"Early stopping triggered after {epoch + 1} epochs")
                 break
         
