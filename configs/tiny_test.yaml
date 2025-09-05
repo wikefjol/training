@@ -32,9 +32,9 @@ training:
   learning_rate: 0.00005  # 5e-5
   weight_decay: 0.01
   warmup_steps: 10
-  max_epochs: 2  # Just 2 epochs for testing
+  max_epochs: 15  # Just 2 epochs for testing
   
-  patience: 5  # No early stopping for test
+  patience: 0  # No early stopping for test
   min_delta: 0.001
   monitor: "val_accuracy"
   

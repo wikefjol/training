@@ -35,9 +35,9 @@ training:
   learning_rate: 0.00005
   weight_decay: 0.01
   warmup_steps: 10
-  max_epochs: 2
+  max_epochs: 15
   
-  patience: 5
+  patience: 0
   min_delta: 0.001
   monitor: "val_accuracy"
   
