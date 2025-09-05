@@ -341,8 +341,8 @@ class HierarchicalTrainer:
         
         return val_metrics
     
-    def save_checkpoint(self, metrics: Dict, is_best: bool = False):
-        """Save model checkpoint"""
+    def save_checkpoint(self, metrics: Dict):
+        """Save model checkpoint for current epoch"""
         checkpoint = {
             'epoch': self.current_epoch,
             'model_state_dict': self.model.state_dict(),
@@ -363,15 +363,10 @@ class HierarchicalTrainer:
             }
         }
         
-        # Save regular checkpoint
+        # Save checkpoint for current epoch (systematic saving)
         checkpoint_path = self.output_dir / f'checkpoint_epoch_{self.current_epoch}.pt'
         torch.save(checkpoint, checkpoint_path)
-        
-        # Save best checkpoint
-        if is_best:
-            best_path = self.output_dir / 'checkpoint_best.pt'
-            torch.save(checkpoint, best_path)
-            logger.info(f"Saved best checkpoint with val_overall_accuracy: {metrics['val_overall_accuracy']:.4f}")
+        logger.info(f"Saved checkpoint for epoch {self.current_epoch}")
     
     def train(self) -> Dict:
         """Main training loop"""
@@ -428,13 +423,8 @@ class HierarchicalTrainer:
             else:
                 self.patience_counter += 1
             
-            # Save checkpoint
-            if self.config['training']['save_best_only']:
-                if is_best:
-                    self.save_checkpoint(epoch_metrics, is_best=True)
-            else:
-                if epoch % self.config['training']['save_frequency'] == 0:
-                    self.save_checkpoint(epoch_metrics, is_best=is_best)
+            # Save checkpoint for every epoch (systematic saving)
+            self.save_checkpoint(epoch_metrics)
             
             # Early stopping
             if self.patience_counter >= self.config['training']['patience']:
@@ -446,10 +436,23 @@ class HierarchicalTrainer:
         with open(history_path, 'w') as f:
             json.dump(self.training_history, f, indent=2)
         
-        # Return final metrics
-        return {
+        # Find best epoch metrics
+        best_epoch_idx = max(range(len(self.training_history)), 
+                            key=lambda i: self.training_history[i]['val_overall_accuracy'])
+        best_epoch_metrics = self.training_history[best_epoch_idx]
+        
+        # Save enhanced results.json
+        results = {
             'fold': self.fold,
-            'best_val_accuracy': self.best_val_accuracy,
+            'best_epoch': best_epoch_metrics['epoch'],
+            'best_val_accuracy': best_epoch_metrics['val_overall_accuracy'],
+            'best_metrics': best_epoch_metrics,
             'final_epoch': self.current_epoch,
             'training_history': self.training_history
         }
+        
+        results_path = self.output_dir / 'results.json'
+        with open(results_path, 'w') as f:
+            json.dump(results, f, indent=2)
+        
+        return results
