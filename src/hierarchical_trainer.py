@@ -371,7 +371,7 @@ class HierarchicalTrainer:
         if is_best:
             best_path = self.output_dir / 'checkpoint_best.pt'
             torch.save(checkpoint, best_path)
-            logger.info(f"Saved best checkpoint with mean_acc: {metrics['mean_acc']:.4f}")
+            logger.info(f"Saved best checkpoint with val_overall_accuracy: {metrics['val_overall_accuracy']:.4f}")
     
     def train(self) -> Dict:
         """Main training loop"""
@@ -391,9 +391,9 @@ class HierarchicalTrainer:
             epoch_metrics = {
                 'epoch': epoch,
                 'train_loss': train_metrics['loss'],
-                'train_mean_acc': train_metrics['mean_acc'],
+                'train_overall_accuracy': train_metrics['mean_acc'],
                 'val_loss': val_metrics['loss'],
-                'val_mean_acc': val_metrics['mean_acc'],
+                'val_overall_accuracy': val_metrics['mean_acc'],
                 'learning_rate': self.optimizer.param_groups[0]['lr']
             }
             

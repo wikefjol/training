@@ -203,7 +203,7 @@ class Trainer:
         if is_best:
             best_path = self.output_dir / 'checkpoint_best.pt'
             torch.save(checkpoint, best_path)
-            logger.info(f"Saved best checkpoint with val_accuracy: {metrics['val_accuracy']:.4f}")
+            logger.info(f"Saved best checkpoint with val_overall_accuracy: {metrics['val_overall_accuracy']:.4f}")
     
     def train(self) -> Dict:
         """Main training loop"""
@@ -222,9 +222,9 @@ class Trainer:
             epoch_metrics = {
                 'epoch': epoch,
                 'train_loss': train_metrics['loss'],
-                'train_accuracy': train_metrics['accuracy'],
+                'train_overall_accuracy': train_metrics['accuracy'],
                 'val_loss': val_metrics['loss'],
-                'val_accuracy': val_metrics['accuracy'],
+                'val_overall_accuracy': val_metrics['accuracy'],
                 'learning_rate': self.optimizer.param_groups[0]['lr']
             }
             self.training_history.append(epoch_metrics)
