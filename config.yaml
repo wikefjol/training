@@ -15,7 +15,7 @@ experiment:
 model:
   # Architecture
   type: "bert"  # Simple BERT-like transformer
-  vocab_size: 1024  # Will be set dynamically based on data
+  vocab_size: 69  # Exhaustive 3-mer vocab: 64 k-mers + 5 special tokens
   hidden_size: 256  # 256 for debug, 768 for full
   num_hidden_layers: 4  # 4 for debug, 12 for full
   num_attention_heads: 4  # 4 for debug, 12 for full
@@ -34,8 +34,8 @@ model:
 preprocessing:
   # Tokenization
   tokenizer: "kmer"  # "kmer" or "character"
-  kmer_size: 6
-  stride: 1
+  kmer_size: 3  # Exhaustive 3-mer vocabulary
+  stride: 3  # Non-overlapping k-mers
   max_length: 512
   padding: "max_length"
   truncation: true
