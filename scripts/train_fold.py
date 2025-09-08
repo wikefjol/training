@@ -99,8 +99,8 @@ def train_fold(fold: int, config: dict, paths: dict):
         data_path, fold, config['experiment']['fold_type']
     )
     
-    # Load fold-specific label encoders
-    encoder_path = data_path.parent / f"label_encoders_{config['experiment']['union_type']}_fold{fold}.json"
+    # Load global label encoders
+    encoder_path = data_path.parent / f"label_encoders_{config['experiment']['union_type']}_global.json"
     label_encoders = None
     encoder_dicts = None
     if encoder_path.exists():
