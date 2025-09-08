@@ -270,24 +270,25 @@ def load_fold_data(data_path: Path, fold: int, fold_type: str) -> Tuple[pd.DataF
     return train_df, val_df
 
 
-def prepare_data_for_training(df: pd.DataFrame) -> Dict:
+def prepare_data_for_training(df: pd.DataFrame, taxonomic_level: str = 'species') -> Dict:
     """
     Prepare dataframe for training
     
     Args:
         df: DataFrame with sequences and labels
+        taxonomic_level: Which taxonomic level to use for labels ('phylum', 'class', 'order', 'family', 'genus', 'species')
         
     Returns:
         Dictionary with sequences, labels, and metadata
     """
-    # Required columns
-    required_cols = ['sequence', 'genus', 'species']
+    # Required columns - sequence always needed, plus the target taxonomic level
+    required_cols = ['sequence', taxonomic_level]
     for col in required_cols:
         if col not in df.columns:
             raise ValueError(f"Missing required column: {col}")
     
-    # Use species labels directly (to match encoder format)
-    df['label'] = df['species']
+    # Use specified taxonomic level for labels
+    df['label'] = df[taxonomic_level]
     
     # Remove rows with missing data
     df = df.dropna(subset=['sequence', 'label'])

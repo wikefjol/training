@@ -283,7 +283,8 @@ def evaluate_fold(fold: int, config: dict, paths: dict, use_best: bool = False, 
         )
     else:
         # Prepare validation data for single-rank
-        val_data = prepare_data_for_training(val_df)
+        target_level = taxonomic_levels[0] if len(taxonomic_levels) == 1 else 'species'
+        val_data = prepare_data_for_training(val_df, target_level)
         # For single-rank evaluation, we only need validation loader
         # Pass dummy train data to satisfy create_data_loaders interface
         dummy_train_data = {'sequences': ['DUMMY'], 'labels': ['DUMMY']}

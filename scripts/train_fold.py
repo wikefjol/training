@@ -121,8 +121,8 @@ def train_fold(fold: int, config: dict, paths: dict):
         logger.warning("Will build encoders from training data (old behavior)")
     
     # Prepare data
-    train_data = prepare_data_for_training(train_df)
-    val_data = prepare_data_for_training(val_df)
+    train_data = prepare_data_for_training(train_df, 'species')
+    val_data = prepare_data_for_training(val_df, 'species')
     
     logger.info(f"Train: {train_data['num_sequences']} sequences, {train_data['num_classes']} classes")
     logger.info(f"Val: {val_data['num_sequences']} sequences, {val_data['num_classes']} classes")
@@ -195,8 +195,8 @@ def train_fold(fold: int, config: dict, paths: dict):
             }
         else:
             # Default species-level (genus_species)
-            train_data = prepare_data_for_training(train_df)
-            val_data = prepare_data_for_training(val_df)
+            train_data = prepare_data_for_training(train_df, 'species')
+            val_data = prepare_data_for_training(val_df, 'species')
         
         train_loader, val_loader = create_data_loaders(
             train_data, val_data, tokenizer,
