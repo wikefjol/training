@@ -22,7 +22,7 @@ from tqdm import tqdm
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.data import load_fold_data, prepare_data_for_training, create_data_loaders, LabelEncoder
-from src.preprocessing import create_tokenizer
+from src.preprocessing import KmerTokenizer
 from src.model import create_model
 
 # Setup logging
@@ -230,7 +230,7 @@ def evaluate_fold(fold: int, checkpoint_path: str, config: dict, paths: dict, us
     
     # Create tokenizer
     logger.info("Building tokenizer...")
-    tokenizer = create_tokenizer(config, None)  # No sequences needed for exhaustive tokenizer
+    tokenizer = KmerTokenizer(k=config['preprocessing']['kmer_size'], stride=config['preprocessing']['stride'])
     
     # Update vocab size in config
     if hasattr(tokenizer, 'vocab'):
