@@ -260,7 +260,7 @@ def evaluate_fold(fold: int, checkpoint_path: str, config: dict, paths: dict, us
     # Create data loader (validation only, with training=False)
     if is_hierarchical:
         _, val_loader = create_data_loaders(
-            None, val_df, tokenizer,
+            val_df, val_df, tokenizer,
             batch_size=config['training']['batch_size'],
             max_length=config['preprocessing']['max_length'],
             num_workers=config['training']['num_workers'],
