@@ -330,7 +330,8 @@ def create_data_loaders(train_data, val_data, tokenizer,
             tokenizer,
             max_length,
             taxonomic_levels,
-            label_encoders=label_encoders  # Pass pre-built encoders
+            label_encoders=label_encoders,  # Pass pre-built encoders,
+            training=True
         )
         
         val_dataset = HierarchicalFungalDataset(
@@ -338,7 +339,8 @@ def create_data_loaders(train_data, val_data, tokenizer,
             tokenizer,
             max_length,
             taxonomic_levels,
-            label_encoders=label_encoders  # Use same encoders for validation
+            label_encoders=label_encoders,  # Use same encoders for validation
+            training=False
         )
         
         # No need to copy encoders if using pre-built ones
