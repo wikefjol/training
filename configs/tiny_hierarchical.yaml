@@ -6,11 +6,9 @@ experiment:
   fold_type: "exp1_sequence_fold"
   dataset_size: "debug_5genera_10fold"
   num_folds: 10
-  folds_to_train: [1]
 
 model:
   type: "bert"
-  vocab_size: 256
   hidden_size: 64
   num_hidden_layers: 2
   num_attention_heads: 2
@@ -21,10 +19,10 @@ model:
   
   # Hierarchical classification settings
   classification_type: "hierarchical"
-  hierarchical_dropout: 0.3
+  hierarchical_dropout: 0.1 
   taxonomic_levels: ["phylum", "class", "order", "family", "genus", "species"]
   use_uncertainty_weighting: false
-  l1_lambda: 0.0001
+  l1_lambda: 0
 
 preprocessing:
   tokenizer: "kmer"
@@ -39,7 +37,7 @@ training:
   learning_rate: 0.00005
   weight_decay: 0.01
   warmup_steps: 10
-  max_epochs: 15
+  max_epochs: 2
   
   patience: 0
   min_delta: 0.001

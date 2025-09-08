@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.data import load_fold_data, prepare_data_for_training, create_data_loaders
-from src.preprocessing import create_tokenizer
+from src.preprocessing import KmerTokenizer
 from src.model import create_model
 from src.trainer import Trainer
 from src.hierarchical_trainer import HierarchicalTrainer
@@ -129,7 +129,7 @@ def train_fold(fold: int, config: dict, paths: dict):
     
     # Create tokenizer
     logger.info("Building tokenizer...")
-    tokenizer = create_tokenizer(config, train_data['sequences'])
+    tokenizer = KmerTokenizer(k=config['preprocessing']['kmer_size'],stride =  config['preprocessing']['stride'])
     
     # Update vocab size in config
     if hasattr(tokenizer, 'vocab'):
