@@ -5,24 +5,25 @@ Preprocessing utilities for DNA sequences
 import re
 from typing import Dict, List, Optional
 from collections import Counter
+from itertools import product
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 class KmerTokenizer:
-    """K-mer based tokenizer for DNA sequences"""
+    """K-mer based tokenizer for DNA sequences with exhaustive alphabet vocabulary"""
     
-    def __init__(self, k: int = 6, stride: int = 1, vocab_size: int = 1024):
+    def __init__(self, k: int = 3, stride: int = 3, alphabet: List[str] = None):
         """
         Args:
             k: K-mer size
-            stride: Stride for k-mer extraction
-            vocab_size: Maximum vocabulary size
+            stride: Stride for k-mer extraction  
+            alphabet: DNA alphabet (default: ['A', 'C', 'G', 'T'])
         """
         self.k = k
         self.stride = stride
-        self.vocab_size = vocab_size
+        self.alphabet = alphabet if alphabet is not None else ['A', 'C', 'G', 'T']
         self.vocab = {}
         self.reverse_vocab = {}
         
@@ -33,8 +34,9 @@ class KmerTokenizer:
         self.sep_token = '[SEP]'
         self.mask_token = '[MASK]'
         
-        # Initialize with special tokens
+        # Initialize with special tokens and exhaustive k-mer vocabulary
         self._init_special_tokens()
+        self._build_exhaustive_vocab()
     
     def _init_special_tokens(self):
         """Initialize special tokens in vocabulary"""
@@ -50,37 +52,29 @@ class KmerTokenizer:
             self.vocab[token] = idx
             self.reverse_vocab[idx] = token
     
+    def _build_exhaustive_vocab(self):
+        """Build exhaustive vocabulary from all possible k-mers in alphabet"""
+        logger.info(f"Building exhaustive {self.k}-mer vocabulary from alphabet {self.alphabet}")
+        
+        # Generate all possible k-mers
+        current_idx = len(self.vocab)  # Start after special tokens
+        
+        for kmer_tuple in product(self.alphabet, repeat=self.k):
+            kmer = ''.join(kmer_tuple)
+            self.vocab[kmer] = current_idx
+            self.reverse_vocab[current_idx] = kmer
+            current_idx += 1
+        
+        logger.info(f"Exhaustive vocabulary built with {len(self.vocab)} tokens ({len(self.vocab) - 5} k-mers + 5 special tokens)")
+    
     def build_vocab(self, sequences: List[str]):
         """
-        Build vocabulary from sequences
+        No-op for exhaustive tokenizer (vocab is already built from alphabet)
         
         Args:
-            sequences: List of DNA sequences
+            sequences: List of DNA sequences (ignored)
         """
-        logger.info(f"Building vocabulary from {len(sequences)} sequences")
-        
-        # Count k-mers
-        kmer_counts = Counter()
-        for seq in sequences:
-            seq = seq.upper()
-            for i in range(0, len(seq) - self.k + 1, self.stride):
-                kmer = seq[i:i + self.k]
-                if re.match(r'^[ACGT]+$', kmer):  # Valid DNA k-mer
-                    kmer_counts[kmer] += 1
-        
-        # Select most common k-mers
-        vocab_size = min(self.vocab_size - len(self.vocab), len(kmer_counts))
-        most_common = kmer_counts.most_common(vocab_size)
-        
-        # Add to vocabulary
-        current_idx = len(self.vocab)
-        for kmer, _ in most_common:
-            if kmer not in self.vocab:
-                self.vocab[kmer] = current_idx
-                self.reverse_vocab[current_idx] = kmer
-                current_idx += 1
-        
-        logger.info(f"Vocabulary built with {len(self.vocab)} tokens")
+        logger.info("Using exhaustive vocabulary - no sequence-based vocab building needed")
     
     def encode(self, sequence: str, max_length: int = 512, 
                padding: str = 'max_length', truncation: bool = True) -> Dict:
@@ -238,7 +232,7 @@ def create_tokenizer(config: Dict, sequences: Optional[List[str]] = None):
     
     Args:
         config: Configuration dictionary
-        sequences: Optional sequences for building vocabulary
+        sequences: Optional sequences for building vocabulary (ignored for exhaustive tokenizer)
         
     Returns:
         Tokenizer instance
@@ -248,11 +242,10 @@ def create_tokenizer(config: Dict, sequences: Optional[List[str]] = None):
     if tokenizer_type == 'kmer':
         tokenizer = KmerTokenizer(
             k=config['preprocessing']['kmer_size'],
-            stride=config['preprocessing']['stride'],
-            vocab_size=config['model']['vocab_size']
+            stride=config['preprocessing']['stride']
         )
         if sequences:
-            tokenizer.build_vocab(sequences)
+            tokenizer.build_vocab(sequences)  # No-op for exhaustive tokenizer
     elif tokenizer_type == 'character':
         tokenizer = CharacterTokenizer()
     else:
