@@ -90,11 +90,10 @@ class FungalSequenceDataset(Dataset):
         sequence = self.sequences[idx]
         label = self.labels[idx]
         
-        # Check if label is known
+        # Encode label (should always succeed with global encoders)
         label_idx = self.label_encoder.encode(label)
         if label_idx is None:
-            # Unknown label - return None to filter out
-            return None
+            raise ValueError(f"Label '{label}' not found in global encoder. This should not happen!")
         
         # Tokenize sequence
         encoding = self.tokenizer.encode(
@@ -205,13 +204,12 @@ class HierarchicalFungalDataset(Dataset):
             if isinstance(self.label_encoders[level], LabelEncoder):
                 label_idx = self.label_encoders[level].encode(label)
                 if label_idx is None:
-                    # Unknown label - skip this sample
-                    return None
+                    raise ValueError(f"Label '{label}' not found in global encoder for {level}. This should not happen!")
             else:
                 # Old dict format (fallback)
                 label_idx = self.label_encoders[level]['label_to_idx'].get(label, None)
                 if label_idx is None:
-                    return None
+                    raise ValueError(f"Label '{label}' not found in encoder for {level}. This should not happen!")
             
             labels[level] = {
                 'label': label,
@@ -286,12 +284,7 @@ def prepare_data_for_training(df: pd.DataFrame) -> Dict:
     }
 
 
-def collate_fn_filter_none(batch):
-    """Custom collate function that filters out None samples"""
-    batch = [x for x in batch if x is not None]
-    if len(batch) == 0:
-        return None
-    return torch.utils.data.dataloader.default_collate(batch)
+# Removed collate_fn_filter_none - no longer needed with global encoders
 
 
 def create_data_loaders(train_data, val_data, tokenizer, 
@@ -371,7 +364,7 @@ def create_data_loaders(train_data, val_data, tokenizer,
         num_workers=num_workers,
         pin_memory=True,
         drop_last=True,
-        collate_fn=collate_fn_filter_none  # Filter None samples
+# No custom collate function needed with global encoders
     )
     
     val_loader = DataLoader(
@@ -380,7 +373,7 @@ def create_data_loaders(train_data, val_data, tokenizer,
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,
-        collate_fn=collate_fn_filter_none  # Filter None samples
+# No custom collate function needed with global encoders
     )
     
     return train_loader, val_loader
