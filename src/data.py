@@ -46,7 +46,7 @@ class FungalSequenceDataset(Dataset):
     """Dataset for fungal sequence classification (single-level)"""
     
     def __init__(self, sequences: List[str], labels: List[str], 
-                 tokenizer, max_length: int = 512, label_encoder: Optional[LabelEncoder] = None):
+                 tokenizer, max_length: int = 512, label_encoder: Optional[LabelEncoder] = None, training = True):
         """
         Args:
             sequences: List of DNA sequences
@@ -59,6 +59,7 @@ class FungalSequenceDataset(Dataset):
         self.labels = labels
         self.tokenizer = tokenizer
         self.max_length = max_length
+        self.training = training
         
         # Use provided encoder or create new one
         if label_encoder:
@@ -88,6 +89,8 @@ class FungalSequenceDataset(Dataset):
     
     def __getitem__(self, idx):
         sequence = self.sequences[idx]
+        if self.training:
+            sequence = sequence
         label = self.labels[idx]
         
         # Encode label (should always succeed with global encoders)
@@ -114,7 +117,7 @@ class HierarchicalFungalDataset(Dataset):
     """Dataset for hierarchical fungal sequence classification"""
     
     def __init__(self, df: pd.DataFrame, tokenizer, max_length: int = 512,
-                 taxonomic_levels: List[str] = None, label_encoders: Optional[Dict[str, LabelEncoder]] = None):
+                 taxonomic_levels: List[str] = None, label_encoders: Optional[Dict[str, LabelEncoder]] = None, training = True):
         """
         Args:
             df: DataFrame with sequences and hierarchical labels
@@ -126,7 +129,8 @@ class HierarchicalFungalDataset(Dataset):
         self.df = df.copy()
         self.tokenizer = tokenizer
         self.max_length = max_length
-        
+        self.training = training
+
         # Default taxonomic levels
         if taxonomic_levels is None:
             taxonomic_levels = ['phylum', 'class', 'order', 'family', 'genus', 'species']
@@ -186,6 +190,9 @@ class HierarchicalFungalDataset(Dataset):
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
         sequence = row['sequence']
+
+        if self.training:
+            sequence = sequence
         
         # Tokenize sequence
         encoding = self.tokenizer.encode(

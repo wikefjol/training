@@ -150,3 +150,57 @@ class KmerTokenizer:
                 sequence += token
         
         return sequence
+    
+import random
+from typing import List, Optional, Sequence
+
+def augment_sequence(seq: str,
+                          alphabet: Sequence[str],
+                          modification_probability: float = 0.05,
+                          weights: Sequence[float] = (0.25, 0.25, 0.25, 0.25),
+                          rng: Optional[random.Random] = None) -> str:
+    """
+    Apply random augmentations (insert, replace, delete, swap) to a DNA/protein
+    sequence with fixed probabilities.
+
+    Args:
+        seq (str): Input sequence.
+        alphabet (Sequence[str]): Valid symbols for insert/replace operations.
+        modification_probability (float): Per-position chance of applying an operation.
+        weights (Sequence[float]): Relative probabilities for (insert, replace, delete, swap).
+        rng (Optional[random.Random]): Optional RNG instance for reproducibility.
+
+    Returns:
+        str: Augmented sequence.
+
+    Notes:
+        - Each position is independently considered for modification.
+        - Insert may occur at the current or next index.
+        - Delete is skipped if sequence length would drop below 1.
+        - Swap exchanges the symbol at the current index with a neighbor.
+    """
+
+    r = rng or random
+    s = list(seq)
+    ops = ("insert", "replace", "delete", "swap")
+    i = 0
+    while i < len(s):
+        if r.random() < modification_probability:
+            op = r.choices(ops, weights=weights, k=1)[0]
+            if op == "insert":
+                ins_idx = r.choice((i, i + 1))
+                if ins_idx <= len(s):
+                    s.insert(ins_idx, r.choice(alphabet))
+            elif op == "replace":
+                s[i] = r.choice(alphabet)
+            elif op == "delete":
+                if len(s) > 1:
+                    s.pop(i)
+                    i += 1  # advance to avoid re-hitting same position repeatedly
+                    continue
+            elif op == "swap":
+                j = i + r.choice((-1, 1))
+                if 0 <= j < len(s):
+                    s[i], s[j] = s[j], s[i]
+        i += 1
+    return "".join(s)
