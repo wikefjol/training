@@ -31,6 +31,7 @@ preprocessing:
   max_length: 128
   padding: "max_length"
   truncation: true
+  base_modification_probability: 0.05
 
 training:
   batch_size: 16

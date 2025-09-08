@@ -48,7 +48,7 @@ class FungalSequenceDataset(Dataset):
     """Dataset for fungal sequence classification (single-level)"""
     
     def __init__(self, sequences: List[str], labels: List[str], 
-                 tokenizer, max_length: int = 512, label_encoder: Optional[LabelEncoder] = None, training = True):
+                 tokenizer, max_length: int = 512, label_encoder: Optional[LabelEncoder] = None, training = True, config = None):
         """
         Args:
             sequences: List of DNA sequences
@@ -62,6 +62,7 @@ class FungalSequenceDataset(Dataset):
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.training = training
+        self.config = config
         
         # Use provided encoder or create new one
         if label_encoder:
@@ -92,7 +93,9 @@ class FungalSequenceDataset(Dataset):
     def __getitem__(self, idx):
         sequence = self.sequences[idx]
         if self.training:
-            sequence = augment_sequence(sequence)
+            mod_prob= self.config['preprocessing']['base_modification_probability'] if self.config else 0
+            sequence = augment_sequence(seq = sequence, modification_probability=mod_prob)
+
         label = self.labels[idx]
         
         # Encode label (should always succeed with global encoders)
@@ -119,7 +122,7 @@ class HierarchicalFungalDataset(Dataset):
     """Dataset for hierarchical fungal sequence classification"""
     
     def __init__(self, df: pd.DataFrame, tokenizer, max_length: int = 512,
-                 taxonomic_levels: List[str] = None, label_encoders: Optional[Dict[str, LabelEncoder]] = None, training = True):
+                 taxonomic_levels: List[str] = None, label_encoders: Optional[Dict[str, LabelEncoder]] = None, training = True, config = None):
         """
         Args:
             df: DataFrame with sequences and hierarchical labels
@@ -132,6 +135,7 @@ class HierarchicalFungalDataset(Dataset):
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.training = training
+        self.config = config
 
         # Default taxonomic levels
         if taxonomic_levels is None:
@@ -194,7 +198,8 @@ class HierarchicalFungalDataset(Dataset):
         sequence = row['sequence']
 
         if self.training:
-            sequence = augment_sequence(sequence)
+            mod_prob= self.config['preprocessing']['base_modification_probability'] if self.config else 0
+            sequence = augment_sequence(seq = sequence, modification_probability=mod_prob)
         
         # Tokenize sequence
         encoding = self.tokenizer.encode(
