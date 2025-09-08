@@ -94,7 +94,7 @@ class FungalSequenceDataset(Dataset):
         sequence = self.sequences[idx]
         if self.training:
             mod_prob= self.config['preprocessing']['base_modification_probability'] if self.config['preprocessing']['base_modification_probability'] else 0
-            alphabet = self.config['preprocessing']['alphabet'] if self.config['preprocessing']['alphabet'] else 0
+            alphabet = self.config['preprocessing'].get('alphabet', ['A','C', 'G', 'T'])
             sequence = augment_sequence(seq = sequence, alphabet = alphabet,modification_probability=mod_prob)
 
         label = self.labels[idx]
@@ -200,7 +200,7 @@ class HierarchicalFungalDataset(Dataset):
 
         if self.training:
             mod_prob= self.config['preprocessing']['base_modification_probability'] if self.config['preprocessing']['base_modification_probability'] else 0
-            alphabet = self.config['preprocessing']['alphabet'] if self.config['preprocessing']['alphabet'] else 0
+            alphabet = self.config['preprocessing'].get('alphabet', ['A','C', 'G', 'T'])
             sequence = augment_sequence(seq = sequence, alphabet = alphabet,modification_probability=mod_prob)
         
         # Tokenize sequence
@@ -366,7 +366,9 @@ def create_data_loaders(train_data, val_data, tokenizer,
             train_data['labels'],
             tokenizer,
             max_length,
-            label_encoder=label_encoder  # Pass single pre-built encoder
+            label_encoder=label_encoder,  # Pass single pre-built encoder
+            training=True,
+            config = config
         )
         
         val_dataset = FungalSequenceDataset(
@@ -374,7 +376,9 @@ def create_data_loaders(train_data, val_data, tokenizer,
             val_data['labels'],
             tokenizer,
             max_length,
-            label_encoder=label_encoder  # Use same encoder for validation
+            label_encoder=label_encoder,  # Use same encoder for validation
+            training=False,
+            config = config
         )
     
     # Create loaders with collate function to filter None samples
