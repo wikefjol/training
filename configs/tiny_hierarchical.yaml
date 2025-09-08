@@ -29,7 +29,7 @@ model:
 preprocessing:
   tokenizer: "kmer"
   kmer_size: 3
-  stride: 1
+  stride: 3
   max_length: 128
   padding: "max_length"
   truncation: true

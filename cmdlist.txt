@@ -1,0 +1,7 @@
+tiny_single_species
+tiny_single_genus
+tiny_single_family
+tiny_single_class
+tiny_single_order
+tiny_single_phylum
+tiny_hierarchical
