@@ -93,8 +93,9 @@ class FungalSequenceDataset(Dataset):
     def __getitem__(self, idx):
         sequence = self.sequences[idx]
         if self.training:
-            mod_prob= self.config['preprocessing']['base_modification_probability'] if self.config else 0
-            sequence = augment_sequence(seq = sequence, modification_probability=mod_prob)
+            mod_prob= self.config['preprocessing']['base_modification_probability'] if self.config['preprocessing']['base_modification_probability'] else 0
+            alphabet = self.config['preprocessing']['alphabet'] if self.config['preprocessing']['alphabet'] else 0
+            sequence = augment_sequence(seq = sequence, alphabet = alphabet,modification_probability=mod_prob)
 
         label = self.labels[idx]
         
@@ -198,8 +199,9 @@ class HierarchicalFungalDataset(Dataset):
         sequence = row['sequence']
 
         if self.training:
-            mod_prob= self.config['preprocessing']['base_modification_probability'] if self.config else 0
-            sequence = augment_sequence(seq = sequence, modification_probability=mod_prob)
+            mod_prob= self.config['preprocessing']['base_modification_probability'] if self.config['preprocessing']['base_modification_probability'] else 0
+            alphabet = self.config['preprocessing']['alphabet'] if self.config['preprocessing']['alphabet'] else 0
+            sequence = augment_sequence(seq = sequence, alphabet = alphabet,modification_probability=mod_prob)
         
         # Tokenize sequence
         encoding = self.tokenizer.encode(
@@ -306,7 +308,8 @@ def create_data_loaders(train_data, val_data, tokenizer,
                        num_workers: int = 4, hierarchical: bool = False,
                        taxonomic_levels: List[str] = None, 
                        label_encoder: Optional[LabelEncoder] = None,
-                       label_encoders: Optional[Dict[str, LabelEncoder]] = None) -> Tuple[DataLoader, DataLoader]:
+                       label_encoders: Optional[Dict[str, LabelEncoder]] = None,
+                       config = None) -> Tuple[DataLoader, DataLoader]:
     """
     Create DataLoaders for training and validation
     
@@ -336,7 +339,8 @@ def create_data_loaders(train_data, val_data, tokenizer,
             max_length,
             taxonomic_levels,
             label_encoders=label_encoders,  # Pass pre-built encoders,
-            training=True
+            training=True,
+            config = config
         )
         
         val_dataset = HierarchicalFungalDataset(
@@ -345,7 +349,8 @@ def create_data_loaders(train_data, val_data, tokenizer,
             max_length,
             taxonomic_levels,
             label_encoders=label_encoders,  # Use same encoders for validation
-            training=False
+            training=False,
+            config = config
         )
         
         # No need to copy encoders if using pre-built ones

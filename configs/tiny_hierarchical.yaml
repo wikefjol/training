@@ -31,7 +31,8 @@ preprocessing:
   max_length: 128
   padding: "max_length"
   truncation: true
-  base_modification_probability: 0.05
+  base_modification_probability: 0.01
+  alphabet: ["A","C","G","T"]
 
 training:
   batch_size: 16
