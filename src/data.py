@@ -12,7 +12,7 @@ import logging
 from collections import defaultdict
 import json
 
-from .preprocessing import augment_sequence
+from preprocessing import augment_sequence
 
 logger = logging.getLogger(__name__)
 
