@@ -46,10 +46,10 @@ training:
   learning_rate: 0.00005  # 5e-5
   weight_decay: 0.01
   warmup_steps: 500
-  max_epochs: 10
+  max_epochs: 2
   
   # Early stopping
-  patience: 3
+  patience: 0
   min_delta: 0.001
   monitor: "val_accuracy"
   
