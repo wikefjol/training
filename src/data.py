@@ -12,6 +12,8 @@ import logging
 from collections import defaultdict
 import json
 
+from .preprocessing import augment_sequence
+
 logger = logging.getLogger(__name__)
 
 
@@ -90,7 +92,7 @@ class FungalSequenceDataset(Dataset):
     def __getitem__(self, idx):
         sequence = self.sequences[idx]
         if self.training:
-            sequence = sequence
+            sequence = augment_sequence(sequence)
         label = self.labels[idx]
         
         # Encode label (should always succeed with global encoders)
@@ -192,7 +194,7 @@ class HierarchicalFungalDataset(Dataset):
         sequence = row['sequence']
 
         if self.training:
-            sequence = sequence
+            sequence = augment_sequence(sequence)
         
         # Tokenize sequence
         encoding = self.tokenizer.encode(
