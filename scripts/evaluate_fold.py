@@ -200,13 +200,25 @@ def run_inference(model, data_loader, device, is_hierarchical: bool, taxonomic_l
     return results
 
 
-def evaluate_fold(fold: int, checkpoint_path: str, config: dict, paths: dict, use_best: bool = False, output_dir: str = None):
+def evaluate_fold(fold: int, config: dict, paths: dict, use_best: bool = False, output_dir: str = None):
     """Main evaluation function"""
     logger.info(f"Starting evaluation for fold {fold}")
     
     # Build experiment base path (reuse train_fold logic)
     experiment_base = Path(paths['experiments_dir']) / config['experiment']['fold_type'] / \
                       config['experiment']['dataset_size']
+    
+    # Auto-generate checkpoint path based on config
+    is_hierarchical = config['model'].get('classification_type', 'single') == 'hierarchical'
+    if is_hierarchical:
+        model_type = "hierarchical"
+    else:
+        taxonomic_levels = config['model'].get('taxonomic_levels', ['species'])
+        target_level = taxonomic_levels[0] if len(taxonomic_levels) == 1 else 'species'
+        model_type = f"single_{target_level}"
+    
+    checkpoint_path = experiment_base / 'models' / config['experiment']['union_type'] / f"fold_{fold}" / model_type
+    logger.info(f"Using checkpoint path: {checkpoint_path}")
     
     # Data path
     data_path = experiment_base / 'data' / f"{config['experiment']['union_type']}.csv"
@@ -365,9 +377,8 @@ def evaluate_fold(fold: int, checkpoint_path: str, config: dict, paths: dict, us
 def main():
     parser = argparse.ArgumentParser(description="Evaluate a trained model on a single fold")
     parser.add_argument('--fold', type=int, required=True, help='Fold number (1-10)')
-    parser.add_argument('--checkpoint', type=str, required=True, help='Path to model checkpoint directory')
+    parser.add_argument('--mode', choices=['final', 'best'], default='final', help='Use final epoch or best epoch checkpoint')
     parser.add_argument('--config', type=str, required=True, help='Path to config file')
-    parser.add_argument('--use-best', action='store_true', help='Use best epoch instead of final')
     parser.add_argument('--output-dir', type=str, help='Override output directory')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     
@@ -383,9 +394,10 @@ def main():
     config['seed'] = args.seed
     
     # Run evaluation
+    use_best = (args.mode == 'best')
     results = evaluate_fold(
-        args.fold, args.checkpoint, config, paths, 
-        args.use_best, args.output_dir
+        args.fold, config, paths, 
+        use_best, args.output_dir
     )
     
     print(f"\nEvaluation complete for fold {args.fold}")
