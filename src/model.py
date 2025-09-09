@@ -17,6 +17,35 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+class MLMHead(nn.Module):
+    """Masked Language Modeling head for pretraining"""
+    
+    def __init__(self, in_features, hidden_layer_size, out_features, dropout_rate=0.1):
+        """
+        Args:
+            in_features: Size of the input features (hidden_size)
+            hidden_layer_size: Size of the hidden layer  
+            out_features: Size of the output features (vocab_size)
+            dropout_rate: Dropout probability
+        """
+        super().__init__()
+        
+        self.in_features = in_features
+        self.hidden_layer_size = hidden_layer_size
+        self.out_features = out_features
+        self.dropout_rate = dropout_rate
+        
+        self.sequential = nn.Sequential(
+            nn.Linear(self.in_features, self.hidden_layer_size),
+            nn.ReLU(),
+            nn.Dropout(p=self.dropout_rate),
+            nn.Linear(self.hidden_layer_size, self.out_features)
+        )
+
+    def forward(self, x):
+        return self.sequential(x)
+
+
 class MultiHeadSelfAttention(nn.Module):
     """Multi-head self-attention layer"""
     
@@ -109,10 +138,10 @@ class TransformerBlock(nn.Module):
 
 
 class SequenceClassificationModel(nn.Module):
-    """BERT-like model for sequence classification"""
+    """BERT-like model for sequence classification and pretraining"""
     
     def __init__(self, vocab_size: int, 
-                 num_classes: Union[int, List[int]],
+                 num_classes: Union[int, List[int]] = None,
                  hidden_size: int = 768,
                  num_hidden_layers: int = 12,
                  num_attention_heads: int = 12,
@@ -121,10 +150,13 @@ class SequenceClassificationModel(nn.Module):
                  attention_probs_dropout_prob: float = 0.1,
                  max_position_embeddings: int = 512,
                  hierarchical: bool = False,
-                 hierarchical_dropout: float = 0.3):
+                 hierarchical_dropout: float = 0.3,
+                 mode: str = "classify",
+                 mlm_dropout_rate: float = 0.1):
         super().__init__()
         
         self.hierarchical = hierarchical
+        self.mode = mode
         
         self.config = {
             'vocab_size': vocab_size,
@@ -136,7 +168,8 @@ class SequenceClassificationModel(nn.Module):
             'hidden_dropout_prob': hidden_dropout_prob,
             'attention_probs_dropout_prob': attention_probs_dropout_prob,
             'max_position_embeddings': max_position_embeddings,
-            'hierarchical': hierarchical
+            'hierarchical': hierarchical,
+            'mode': mode
         }
         
         # Embeddings
@@ -154,20 +187,33 @@ class SequenceClassificationModel(nn.Module):
             for _ in range(num_hidden_layers)
         ])
         
-        # Pooler
-        self.pooler = nn.Linear(hidden_size, hidden_size)
+        # Pooler (only for classification mode)
+        if mode == "classify":
+            self.pooler = nn.Linear(hidden_size, hidden_size)
+            
+            # Classification head
+            if hierarchical:
+                if not isinstance(num_classes, list):
+                    raise ValueError("For hierarchical classification, num_classes must be a list")
+                self.classifier = HierarchicalClassificationHead(
+                    hidden_size, num_classes, hierarchical_dropout
+                )
+            else:
+                if isinstance(num_classes, list):
+                    num_classes = num_classes[-1]  # Use species-level for single classification
+                self.classifier = SingleClassificationHead(hidden_size, num_classes)
         
-        # Classification head
-        if hierarchical:
-            if not isinstance(num_classes, list):
-                raise ValueError("For hierarchical classification, num_classes must be a list")
-            self.classifier = HierarchicalClassificationHead(
-                hidden_size, num_classes, hierarchical_dropout
+        elif mode == "pretrain":
+            # MLM head for pretraining
+            self.mlm_head = MLMHead(
+                in_features=hidden_size,
+                hidden_layer_size=hidden_size, 
+                out_features=vocab_size,
+                dropout_rate=mlm_dropout_rate
             )
+        
         else:
-            if isinstance(num_classes, list):
-                num_classes = num_classes[-1]  # Use species-level for single classification
-            self.classifier = SingleClassificationHead(hidden_size, num_classes)
+            raise ValueError(f"Invalid mode: {mode}. Must be 'classify' or 'pretrain'")
         
         # Initialize weights
         self.init_weights()
@@ -323,17 +369,19 @@ class SequenceClassificationModel(nn.Module):
         
         return self
     
-    def forward(self, input_ids, attention_mask=None):
+    def forward(self, input_ids, attention_mask=None, labels=None):
         """
         Forward pass
         
         Args:
             input_ids: Token ids [batch_size, seq_length]
-            attention_mask: Attention mask [batch_size, seq_length]
+            attention_mask: Attention mask [batch_size, seq_length] 
+            labels: For MLM mode, masked token labels [batch_size, seq_length]
             
         Returns:
             For single classification: Logits [batch_size, num_classes]
             For hierarchical: List of logits for each level
+            For MLM: Token prediction logits [batch_size, seq_length, vocab_size]
         """
         batch_size, seq_length = input_ids.shape
         
@@ -353,15 +401,22 @@ class SequenceClassificationModel(nn.Module):
         for transformer_block in self.transformer_blocks:
             hidden_states = transformer_block(hidden_states, attention_mask)
         
-        # Pool the first token ([CLS] token)
-        pooled_output = hidden_states[:, 0]
-        pooled_output = self.pooler(pooled_output)
-        pooled_output = torch.tanh(pooled_output)
-        
-        # Classification
-        logits = self.classifier(pooled_output)
-        
-        return logits
+        if self.mode == "pretrain":
+            # MLM: predict all tokens
+            mlm_logits = self.mlm_head(hidden_states)  # [batch_size, seq_length, vocab_size]
+            return mlm_logits
+            
+        elif self.mode == "classify":
+            # Classification: pool and classify
+            # Pool the first token ([CLS] token)
+            pooled_output = hidden_states[:, 0]
+            pooled_output = self.pooler(pooled_output)
+            pooled_output = torch.tanh(pooled_output)
+            
+            # Classification
+            logits = self.classifier(pooled_output)
+            
+            return logits
 
 
 def create_model(vocab_size: int, num_classes: Union[int, List[int]], config: Dict):
@@ -370,7 +425,8 @@ def create_model(vocab_size: int, num_classes: Union[int, List[int]], config: Di
     
     Args:
         vocab_size: Vocabulary size
-        num_classes: Number of output classes (int for single, list for hierarchical)
+        num_classes: Number of output classes (int for single, list for hierarchical) 
+                    Can be None for pretraining mode
         config: Configuration dictionary
         
     Returns:
@@ -378,7 +434,10 @@ def create_model(vocab_size: int, num_classes: Union[int, List[int]], config: Di
     """
     model_config = config['model']
     
-    # Determine if hierarchical
+    # Get mode (pretrain or classify)
+    mode = model_config.get('mode', 'classify')
+    
+    # Determine if hierarchical (only relevant for classification)
     is_hierarchical = model_config.get('classification_type', 'single') == 'hierarchical'
     
     model = SequenceClassificationModel(
@@ -392,27 +451,40 @@ def create_model(vocab_size: int, num_classes: Union[int, List[int]], config: Di
         attention_probs_dropout_prob=model_config['attention_probs_dropout_prob'],
         max_position_embeddings=model_config['max_position_embeddings'],
         hierarchical=is_hierarchical,
-        hierarchical_dropout=model_config.get('hierarchical_dropout', 0.3)
+        hierarchical_dropout=model_config.get('hierarchical_dropout', 0.3),
+        mode=mode,
+        mlm_dropout_rate=model_config.get('mlm_dropout_rate', 0.1)
     )
     
-    # Load pretrained backbone weights - REQUIRED for all training
+    # Handle pretrained weights loading
     pretrained_path = config.get('pretrained_model_path')
-    if not pretrained_path:
-        raise ValueError(
-            "No pretrained_model_path specified in config. "
-            "Training from scratch is not allowed to prevent wasting compute resources. "
-            "Please add pretrained_model_path to your config file."
-        )
     
-    if not os.path.exists(pretrained_path):
-        raise FileNotFoundError(
-            f"Pretrained model not found: {pretrained_path}\n"
-            "Training cannot continue without pretrained weights. "
-            "Please verify the file exists and the path is correct."
-        )
-    
-    logger.info(f"Loading pretrained backbone from: {pretrained_path}")
-    model.load_pretrained_backbone(pretrained_path)
+    if mode == "pretrain":
+        # For pretraining, pretrained path is optional
+        if pretrained_path and os.path.exists(pretrained_path):
+            logger.info(f"Loading pretrained backbone from: {pretrained_path}")
+            model.load_pretrained_backbone(pretrained_path)
+        else:
+            logger.info("No pretrained model specified for pretraining - training from scratch")
+            
+    elif mode == "classify":
+        # For classification, pretrained path is required
+        if not pretrained_path:
+            raise ValueError(
+                "No pretrained_model_path specified in config. "
+                "Training from scratch is not allowed to prevent wasting compute resources. "
+                "Please add pretrained_model_path to your config file."
+            )
+        
+        if not os.path.exists(pretrained_path):
+            raise FileNotFoundError(
+                f"Pretrained model not found: {pretrained_path}\n"
+                "Training cannot continue without pretrained weights. "
+                "Please verify the file exists and the path is correct."
+            )
+        
+        logger.info(f"Loading pretrained backbone from: {pretrained_path}")
+        model.load_pretrained_backbone(pretrained_path)
     
     # Add uncertainty weighting parameters if specified
     if is_hierarchical and model_config.get('use_uncertainty_weighting', False):
