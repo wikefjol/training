@@ -105,10 +105,10 @@ def print_performance_table(results_dict, taxonomic_levels):
     """Print performance table with actual accuracy values"""
     
     print("\nACCURACY TABLE BY FOLD (Accuracy %)")
-    print("=" * 120)
+    print("=" * 130)
     
-    # Header
-    header = f"{'Level':<8} {'Model':<4} " + "".join(f"{'F'+str(f):>6}" for f in range(1, 11)) + f" {'Mean±Std':>11} {'Δ':>6} {'Sig':>4}"
+    # Header with statistics on the left
+    header = f"{'Level':<8} {'Model':<5} {'Mean±Std':>10} {'Δ':>7} {'Sig':>4} │ " + "".join(f"{'F'+str(f):>6}" for f in range(1, 11))
     print(header)
     print("─" * len(header))
     
@@ -150,17 +150,18 @@ def print_performance_table(results_dict, taxonomic_levels):
         
         # Print hierarchical row
         hier_values_str = "".join(f"{val:6.1f}" if not np.isnan(val) else "   N/A" for val in all_hier_values)
-        print(f"{level.title():<8} {'H':<4} {hier_values_str} {hier_mean:5.1f}±{hier_std:4.1f} {diff:+6.1f} {sig_str:>4}")
+        print(f"{level.title():<8} {'H':<5} {hier_mean:5.1f}±{hier_std:4.1f} {diff:+7.1f} {sig_str:>4} │ {hier_values_str}")
         
         # Print ensemble row
         ens_values_str = "".join(f"{val:6.1f}" if not np.isnan(val) else "   N/A" for val in all_ensemble_values)
-        print(f"{'':8} {'S':<4} {ens_values_str} {ensemble_mean:5.1f}±{ensemble_std:4.1f}")
+        print(f"{'':8} {'S':<5} {ensemble_mean:5.1f}±{ensemble_std:4.1f} {'':>7} {'':>4} │ {ens_values_str}")
         
         if level != taxonomic_levels[-1]:
             print()  # Add spacing between levels
     
     print("\n" + "─" * len(header))
     print("Legend: H=Hierarchical, S=Single Ensemble")
+    print("Statistics on Hierarchical row only. Δ = Hierarchical - Single Ensemble")
     print("Significance: *** p<0.001, ** p<0.01, * p<0.05, · p<0.1, ns=not significant")
 
 def print_summary_table(results_dict, taxonomic_levels):
