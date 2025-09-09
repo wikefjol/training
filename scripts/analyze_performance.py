@@ -133,8 +133,8 @@ def print_performance_heatmap(results_dict, taxonomic_levels):
     print("Thresholds are fixed per taxonomic level for interpretability")
     print()
     
-    # Header
-    header = "       " + "".join(f"F{f:2d} " for f in range(1, 11)) + " Mean±Std   Δ    Sig"
+    # Header - simplified numbering for better alignment
+    header = "       " + "".join(f"{f:2d} " for f in range(1, 11)) + " Mean±Std   Δ    Sig"
     print(header)
     print("     ┌" + "─" * (len(header) - 6) + "┐")
     
@@ -293,21 +293,30 @@ def print_lineage_validation(lineage_results):
         print("   Run: python scripts/create_lineage_reference.py --data-path /path/to/data.csv --output-dir /path/to/output")
         return
     
-    # Summary table
+    # Summary table - compact format with H/S columns
     print("Taxonomic Consistency Metrics:")
     print("─" * 80)
-    header = f"{'Fold':<6} │ {'Model':<15} │ {'Valid Lineages':<15} │ {'Perfect Lineages':<16} │ {'Samples':<8}"
+    header = f"{'Fold':<6} │ {'Valid Lineages':<19} │ {'Perfect Lineages':<19} │ {'Samples':<8}"
     print(header)
-    print("─" * len(header))
+    sub_header = f"{'':>6} │ {'H':>8} {'S':>8} │ {'H':>8} {'S':>8} │"
+    print(sub_header)
+    print("─" * max(len(header), len(sub_header)))
     
     for fold in sorted(lineage_results.keys()):
-        for model_type in ['hierarchical', 'single_ensemble']:
-            if model_type in lineage_results[fold]:
-                validity, accuracy, samples = lineage_results[fold][model_type]
-                model_name = "Hierarchical" if model_type == 'hierarchical' else "Single Ensemble"
-                
-                if not np.isnan(validity):
-                    print(f"F{fold:<5} │ {model_name:<15} │ {validity*100:6.1f}%        │ {accuracy*100:7.1f}%         │ {samples:<8}")
+        hier_data = lineage_results[fold].get('hierarchical', (np.nan, np.nan, 0))
+        ens_data = lineage_results[fold].get('single_ensemble', (np.nan, np.nan, 0))
+        
+        hier_validity, hier_accuracy, hier_samples = hier_data
+        ens_validity, ens_accuracy, ens_samples = ens_data
+        
+        samples = max(hier_samples, ens_samples)  # Should be same, but just in case
+        
+        hier_val_str = f"{hier_validity*100:5.1f}%" if not np.isnan(hier_validity) else "  N/A"
+        ens_val_str = f"{ens_validity*100:5.1f}%" if not np.isnan(ens_validity) else "  N/A"
+        hier_acc_str = f"{hier_accuracy*100:5.1f}%" if not np.isnan(hier_accuracy) else "  N/A"
+        ens_acc_str = f"{ens_accuracy*100:5.1f}%" if not np.isnan(ens_accuracy) else "  N/A"
+        
+        print(f"F{fold:<5} │ {hier_val_str:>8} {ens_val_str:>8} │ {hier_acc_str:>8} {ens_acc_str:>8} │ {samples:<8}")
     
     # Summary statistics
     print("\n" + "─" * 80)
@@ -333,11 +342,11 @@ def print_lineage_validation(lineage_results):
                 ens_accuracies.append(a * 100)
     
     if hier_validities and ens_validities:
-        print(f"Valid Lineages    - Hierarchical: {np.mean(hier_validities):5.1f}±{np.std(hier_validities):4.1f}%")
-        print(f"                  - Single Ensemble: {np.mean(ens_validities):5.1f}±{np.std(ens_validities):4.1f}%")
-        
-        print(f"Perfect Lineages  - Hierarchical: {np.mean(hier_accuracies):5.1f}±{np.std(hier_accuracies):4.1f}%")
-        print(f"                  - Single Ensemble: {np.mean(ens_accuracies):5.1f}±{np.std(ens_accuracies):4.1f}%")
+        print(f"Valid Lineages     - Hierarchical:     {np.mean(hier_validities):5.1f}±{np.std(hier_validities):4.1f}%")
+        print(f"                   - Single Ensemble: {np.mean(ens_validities):5.1f}±{np.std(ens_validities):4.1f}%")
+        print()
+        print(f"Perfect Lineages   - Hierarchical:     {np.mean(hier_accuracies):5.1f}±{np.std(hier_accuracies):4.1f}%")
+        print(f"                   - Single Ensemble: {np.mean(ens_accuracies):5.1f}±{np.std(ens_accuracies):4.1f}%")
         
         # Statistical tests
         if len(hier_validities) >= 3 and len(ens_validities) >= 3:
