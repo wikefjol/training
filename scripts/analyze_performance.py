@@ -52,31 +52,6 @@ def calculate_accuracy(df, level):
         
     return (df[true_col] == df[pred_col]).mean()
 
-def get_fixed_thresholds(level):
-    """Get interpretable fixed thresholds based on taxonomic level"""
-    # Use meaningful, interpretable thresholds
-    if level in ['phylum', 'class']:
-        return [50, 70, 85, 95, 100]  # Very high accuracy expected
-    elif level in ['order', 'family']:
-        return [30, 50, 70, 85, 100]  # Moderate accuracy expected  
-    else:  # genus, species
-        return [5, 15, 30, 50, 100]   # Lower accuracy expected
-        
-def value_to_symbol(value, thresholds):
-    """Convert accuracy value to visual symbol based on fixed thresholds"""
-    if np.isnan(value):
-        return '?'
-    
-    if value >= thresholds[4]:
-        return '■'  # Excellent (>95%, >85%, >50%)
-    elif value >= thresholds[3]:
-        return '▓'  # Very Good (85-95%, 70-85%, 30-50%) 
-    elif value >= thresholds[2]:
-        return '▒'  # Good (70-85%, 50-70%, 15-30%)
-    elif value >= thresholds[1]:
-        return '░'  # Fair (50-70%, 30-50%, 5-15%)
-    else:
-        return '·'  # Poor (<50%, <30%, <5%)
 
 def load_lineage_reference(lineage_ref_dir):
     """Load lineage reference set for validation"""
@@ -126,25 +101,21 @@ def calculate_lineage_validity(df, valid_lineages_set, taxonomic_levels):
     
     return validity_rate, accuracy_rate
 
-def print_performance_heatmap(results_dict, taxonomic_levels):
-    """Print performance heatmap with interpretable thresholds"""
+def print_performance_table(results_dict, taxonomic_levels):
+    """Print performance table with actual accuracy values"""
     
-    print("\nPERFORMANCE HEATMAP (Accuracy %)")
-    print("■ = Excellent  ▓ = Very Good  ▒ = Good  ░ = Fair  · = Poor")
-    print("Thresholds are fixed per taxonomic level for interpretability")
-    print()
+    print("\nACCURACY TABLE BY FOLD (Accuracy %)")
+    print("=" * 120)
     
-    # Header - simplified numbering for better alignment
-    header = "       " + "".join(f"{f:2d} " for f in range(1, 11)) + " Mean±Std   Δ    Sig"
+    # Header
+    header = f"{'Level':<8} {'Model':<4} " + "".join(f"{'F'+str(f):>6}" for f in range(1, 11)) + f" {'Mean±Std':>11} {'Δ':>6} {'Sig':>4}"
     print(header)
-    print("     ┌" + "─" * (len(header) - 6) + "┐")
+    print("─" * len(header))
     
     for level in taxonomic_levels:
-        thresholds = get_fixed_thresholds(level)
-        
         # Get values for this level
-        all_hier_values = [results_dict[f][level]['hierarchical'] for f in range(1, 11)]
-        all_ensemble_values = [results_dict[f][level]['single_ensemble'] for f in range(1, 11)]
+        all_hier_values = [results_dict.get(f, {}).get(level, {}).get('hierarchical', np.nan) for f in range(1, 11)]
+        all_ensemble_values = [results_dict.get(f, {}).get(level, {}).get('single_ensemble', np.nan) for f in range(1, 11)]
         
         # Calculate statistics
         hier_mean = np.nanmean(all_hier_values)
@@ -175,22 +146,21 @@ def print_performance_heatmap(results_dict, taxonomic_levels):
         else:
             sig_str = "?"
         
-        # Print hierarchical row
-        hier_symbols = "".join(f"{value_to_symbol(results_dict[f][level]['hierarchical'], thresholds):>3}" 
-                              for f in range(1, 11))
         diff = hier_mean - ensemble_mean
-        print(f"{level[:3].title()} H│{hier_symbols} │{hier_mean:5.1f}±{hier_std:4.1f} {diff:+5.1f}  {sig_str:>3}")
         
-        # Print ensemble row  
-        ensemble_symbols = "".join(f"{value_to_symbol(results_dict[f][level]['single_ensemble'], thresholds):>3}" 
-                                  for f in range(1, 11))
-        print(f"    S│{ensemble_symbols} │{ensemble_mean:5.1f}±{ensemble_std:4.1f}")
+        # Print hierarchical row
+        hier_values_str = "".join(f"{val:6.1f}" if not np.isnan(val) else "   N/A" for val in all_hier_values)
+        print(f"{level.title():<8} {'H':<4} {hier_values_str} {hier_mean:5.1f}±{hier_std:4.1f} {diff:+6.1f} {sig_str:>4}")
+        
+        # Print ensemble row
+        ens_values_str = "".join(f"{val:6.1f}" if not np.isnan(val) else "   N/A" for val in all_ensemble_values)
+        print(f"{'':8} {'S':<4} {ens_values_str} {ensemble_mean:5.1f}±{ensemble_std:4.1f}")
         
         if level != taxonomic_levels[-1]:
-            print("     ├" + "─" * (len(header) - 6) + "┤")
+            print()  # Add spacing between levels
     
-    print("     └" + "─" * (len(header) - 6) + "┘")
-    print("\nLegend: H=Hierarchical, S=Single Ensemble")
+    print("\n" + "─" * len(header))
+    print("Legend: H=Hierarchical, S=Single Ensemble")
     print("Significance: *** p<0.001, ** p<0.01, * p<0.05, · p<0.1, ns=not significant")
 
 def print_summary_table(results_dict, taxonomic_levels):
@@ -576,7 +546,7 @@ def main():
     print(f"Folds analyzed: {sorted(results_dict.keys())}")
     print(f"Taxonomic levels: {', '.join(taxonomic_levels)}")
     
-    print_performance_heatmap(results_dict, taxonomic_levels)
+    print_performance_table(results_dict, taxonomic_levels)
     print_trend_visualization(results_dict, taxonomic_levels)
     print_summary_table(results_dict, taxonomic_levels)
     
