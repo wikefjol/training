@@ -1,0 +1,41 @@
+
+
+# Train models (fold 1 of 10)
+  python scripts/train_fold.py --fold 1 --config configs/tiny_hierarchical.yaml
+  python scripts/train_fold.py --fold 1 --config configs/tiny_single_phylum.yaml
+  python scripts/train_fold.py --fold 1 --config configs/tiny_single_class.yaml
+  python scripts/train_fold.py --fold 1 --config configs/tiny_single_order.yaml
+  python scripts/train_fold.py --fold 1 --config configs/tiny_single_family.yaml
+  python scripts/train_fold.py --fold 1 --config configs/tiny_single_genus.yaml
+  python scripts/train_fold.py --fold 1 --config configs/tiny_single_species.yaml
+
+  # Evaluate models (fold 1 of 10)
+  python scripts/evaluate_fold.py --fold 1 --config configs/tiny_hierarchical.yaml --mode best
+  python scripts/evaluate_fold.py --fold 1 --config configs/tiny_single_phylum.yaml --mode best
+  python scripts/evaluate_fold.py --fold 1 --config configs/tiny_single_class.yaml --mode best
+  python scripts/evaluate_fold.py --fold 1 --config configs/tiny_single_order.yaml --mode best
+  python scripts/evaluate_fold.py --fold 1 --config configs/tiny_single_family.yaml --mode best
+  python scripts/evaluate_fold.py --fold 1 --config configs/tiny_single_genus.yaml --mode best
+  python scripts/evaluate_fold.py --fold 1 --config configs/tiny_single_species.yaml --mode best
+
+
+# Evalueate the folds:
+cd /cephyr/users/filbern/Alvis/workspace/training
+for fold in {1..10}; do
+  for model in tiny_hierarchical tiny_single_phylum tiny_single_class tiny_single_order tiny_single_family tiny_single_genus tiny_single_species;
+  do
+    python scripts/evaluate_fold.py --fold $fold --config configs/$model.yaml --mode best
+  done
+done
+
+# Running aggregation manually per fold:
+cd /cephyr/users/filbern/Alvis/workspace/training
+BASE_DIR="/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/experiments/exp1_sequence_fold/debug_5genera_10fold/models/standard"
+for fold in {1..10}; do
+  python scripts/aggregate_single_rank_results.py --fold $fold --input-dir $BASE_DIR/fold_$fold/ --output-dir $BASE_DIR/fold_$fold/
+done
+
+
+# run analysis
+cd /cephyr/users/filbern/Alvis/workspace/training
+python scripts/analyze_performance.py --base-path /mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/experiments/exp1_sequence_fold/debug_5genera_10fold/models/standard --lineage-ref /mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/experiments/exp1_sequence_fold/debug_5genera_10fold/data/ --save-output /mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/analysis/
