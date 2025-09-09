@@ -11,6 +11,13 @@ from typing import List, Dict, Optional
 import logging
 from pathlib import Path
 
+# Import augmentation function
+try:
+    from preprocessing import augment_sequence
+    AUGMENTATION_AVAILABLE = True
+except ImportError:
+    AUGMENTATION_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,7 +26,8 @@ class MLMDataset(Dataset):
     
     def __init__(self, sequences: List[str], tokenizer, max_length: int = 512,
                  masking_prob: float = 0.15, replace_prob: float = 0.8, 
-                 random_prob: float = 0.1, ignore_index: int = -100):
+                 random_prob: float = 0.1, ignore_index: int = -100,
+                 augmentation_prob: float = 0.01, alphabet: List[str] = None):
         """
         Args:
             sequences: List of DNA sequences
@@ -29,6 +37,8 @@ class MLMDataset(Dataset):
             replace_prob: Probability of replacing masked token with [MASK]
             random_prob: Probability of replacing masked token with random token
             ignore_index: Index for tokens to ignore in loss calculation
+            augmentation_prob: Probability of sequence augmentation (same as finetuning)
+            alphabet: DNA alphabet for augmentation
         """
         self.sequences = sequences
         self.tokenizer = tokenizer
@@ -38,12 +48,18 @@ class MLMDataset(Dataset):
         self.random_prob = random_prob
         self.ignore_index = ignore_index
         
+        # Augmentation settings
+        self.augmentation_prob = augmentation_prob
+        self.alphabet = alphabet if alphabet is not None else ['A', 'C', 'G', 'T']
+        self.use_augmentation = AUGMENTATION_AVAILABLE and augmentation_prob > 0
+        
         # Get special token IDs
         self.pad_id = tokenizer.vocab.get('[PAD]', 0)
         self.mask_id = tokenizer.vocab.get('[MASK]', 4)
         self.vocab_size = len(tokenizer.vocab)
         
         logger.info(f"MLM Dataset: {len(sequences)} sequences, masking_prob={masking_prob}")
+        logger.info(f"Augmentation: enabled={self.use_augmentation}, prob={augmentation_prob}")
         logger.info(f"Special tokens: PAD={self.pad_id}, MASK={self.mask_id}")
     
     def __len__(self):
@@ -52,7 +68,15 @@ class MLMDataset(Dataset):
     def __getitem__(self, idx):
         sequence = self.sequences[idx]
         
-        # Tokenize sequence (no augmentation - handled separately if needed)
+        # Apply sequence augmentation (consistent with finetuning)
+        if self.use_augmentation:
+            sequence = augment_sequence(
+                seq=sequence, 
+                alphabet=self.alphabet, 
+                modification_probability=self.augmentation_prob
+            )
+        
+        # Tokenize sequence
         encoding = self.tokenizer.encode(
             sequence, 
             max_length=self.max_length,
@@ -162,18 +186,25 @@ def create_mlm_data_loaders(data_path: Path, tokenizer, config: Dict) -> tuple:
     logger.info(f"Pretraining split: {len(train_sequences)} train, {len(val_sequences)} val")
     
     # Create datasets
+    augmentation_prob = config['preprocessing'].get('base_modification_probability', 0.01)
+    alphabet = config['preprocessing'].get('alphabet', ['A', 'C', 'G', 'T'])
+    
     train_dataset = MLMDataset(
         train_sequences, 
         tokenizer,
         max_length=config['preprocessing']['max_length'],
-        masking_prob=config['preprocessing'].get('masking_percentage', 0.15)
+        masking_prob=config['preprocessing'].get('masking_percentage', 0.15),
+        augmentation_prob=augmentation_prob,
+        alphabet=alphabet
     )
     
     val_dataset = MLMDataset(
         val_sequences,
         tokenizer, 
         max_length=config['preprocessing']['max_length'],
-        masking_prob=config['preprocessing'].get('masking_percentage', 0.15)
+        masking_prob=config['preprocessing'].get('masking_percentage', 0.15),
+        augmentation_prob=augmentation_prob,
+        alphabet=alphabet
     )
     
     # Create data loaders
