@@ -480,15 +480,18 @@ def create_model(vocab_size: int, num_classes: Union[int, List[int]], config: Di
             logger.info("No pretrained model specified for pretraining - training from scratch")
             
     elif mode == "classify":
-        # For classification, automatically resolve pretrained model path from experiment structure
-        pretrained_path = config.get('pretrained_model_path')
+        # For classification, resolve pretrained model path with fallback strategy
+        from pathlib import Path
         
-        # If no explicit path provided, auto-resolve from experiment config
-        if not pretrained_path:
-            from pathlib import Path
-            import os
-            
-            # Build experiment path
+        # Strategy 1: Use explicit config path if provided
+        explicit_path = config.get('pretrained_model_path')
+        pretrained_path = None
+        
+        if explicit_path and os.path.exists(explicit_path):
+            pretrained_path = explicit_path
+            logger.info(f"Using explicit pretrained model path: {pretrained_path}")
+        else:
+            # Strategy 2: Auto-resolve from experiment structure
             experiments_dir = os.path.expandvars(os.getenv('EXPERIMENTS_DIR'))
             experiment_base = Path(experiments_dir) / config['experiment']['fold_type'] / \
                               config['experiment']['dataset_size']
@@ -500,12 +503,19 @@ def create_model(vocab_size: int, num_classes: Union[int, List[int]], config: Di
                 pretrained_path = str(auto_pretrained_path)
                 logger.info(f"Auto-resolved pretrained model path: {pretrained_path}")
             else:
-                raise FileNotFoundError(
-                    f"No pretrained model found at expected location: {auto_pretrained_path}\n"
-                    "Please run pretraining first or specify pretrained_model_path in config."
-                )
+                # Strategy 3: Fallback to explicit config path even if it didn't exist initially
+                if explicit_path:
+                    logger.warning(f"Auto-resolve failed, attempting fallback to config path: {explicit_path}")
+                    pretrained_path = explicit_path  # Will be verified below
+                else:
+                    raise FileNotFoundError(
+                        f"No pretrained model found at:\n"
+                        f"  Auto-resolved: {auto_pretrained_path}\n"
+                        f"  Config path: {explicit_path or 'Not specified'}\n"
+                        "Please run pretraining first or specify valid pretrained_model_path in config."
+                    )
         
-        # Verify path exists  
+        # Verify final path exists
         if not os.path.exists(pretrained_path):
             raise FileNotFoundError(
                 f"Pretrained model not found: {pretrained_path}\n"
