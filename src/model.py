@@ -328,26 +328,39 @@ class SequenceClassificationModel(nn.Module):
             skipped_keys = []
             mapped_keys = []
             
+            # Detect checkpoint format
+            is_huggingface_format = any(key.startswith('bert.') for key in pretrained_state_dict.keys())
+            
             # Load matching backbone weights (exclude classification heads)
             for pretrained_key, value in pretrained_state_dict.items():
                 # Skip classification head weights (these should be randomly initialized)
                 if (pretrained_key.startswith('classifier.') or 
                     pretrained_key.startswith('head.') or
-                    pretrained_key.startswith('bert.pooler.')):
+                    pretrained_key.startswith('bert.pooler.') or
+                    pretrained_key.startswith('mlm_head.')):  # Also skip MLM head
                     skipped_keys.append(pretrained_key)
                     continue
                 
-                # Map HuggingFace key to our model key
-                mapped_key = self._map_pretrained_key(pretrained_key)
+                # Determine target key based on checkpoint format
+                if is_huggingface_format:
+                    # Map HuggingFace key to our model key
+                    mapped_key = self._map_pretrained_key(pretrained_key)
+                    target_key = mapped_key
+                else:
+                    # Native format - use key directly (no mapping needed)
+                    target_key = pretrained_key
                 
-                if mapped_key and mapped_key in current_state_dict:
-                    if current_state_dict[mapped_key].shape == value.shape:
-                        current_state_dict[mapped_key] = value
-                        loaded_keys.append(mapped_key)
-                        mapped_keys.append(f"{pretrained_key} -> {mapped_key}")
+                if target_key and target_key in current_state_dict:
+                    if current_state_dict[target_key].shape == value.shape:
+                        current_state_dict[target_key] = value
+                        loaded_keys.append(target_key)
+                        if is_huggingface_format:
+                            mapped_keys.append(f"{pretrained_key} -> {target_key}")
+                        else:
+                            mapped_keys.append(pretrained_key)
                     else:
-                        logger.warning(f"Shape mismatch for {pretrained_key} -> {mapped_key}: "
-                                     f"current={current_state_dict[mapped_key].shape}, "
+                        logger.warning(f"Shape mismatch for {pretrained_key} -> {target_key}: "
+                                     f"current={current_state_dict[target_key].shape}, "
                                      f"pretrained={value.shape}")
                         skipped_keys.append(pretrained_key)
                 else:
