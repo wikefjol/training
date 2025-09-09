@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.data import load_fold_data, prepare_data_for_training, create_data_loaders
-from src.preprocessing import KmerTokenizer
+from src.legacy_preprocessing import LegacyTokenizer
 from src.model import create_model
 from src.trainer import Trainer
 from src.hierarchical_trainer import HierarchicalTrainer
@@ -127,14 +127,24 @@ def train_fold(fold: int, config: dict, paths: dict):
     logger.info(f"Train: {train_data['num_sequences']} sequences, {train_data['num_classes']} classes")
     logger.info(f"Val: {val_data['num_sequences']} sequences, {val_data['num_classes']} classes")
     
-    # Create tokenizer
-    logger.info("Building tokenizer...")
-    tokenizer = KmerTokenizer(k=config['preprocessing']['kmer_size'],stride =  config['preprocessing']['stride'])
+    # Create legacy tokenizer
+    logger.info("Building legacy tokenizer...")
+    # Calculate optimal_length: max_length (bases) / kmer_size = tokens
+    # 1500 bases / 3 = 500 tokens
+    optimal_length = config['preprocessing']['max_length'] // config['preprocessing']['kmer_size']
     
-    # Update vocab size in config
-    if hasattr(tokenizer, 'vocab'):
-        config['model']['vocab_size'] = len(tokenizer.vocab)
-        logger.info(f"Vocabulary size: {len(tokenizer.vocab)}")
+    tokenizer = LegacyTokenizer(
+        k=config['preprocessing']['kmer_size'],
+        optimal_length=optimal_length,
+        modification_probability=config['preprocessing']['base_modification_probability'],
+        alphabet=config['preprocessing']['alphabet']
+    )
+    
+    # Update vocab size in config  
+    config['model']['vocab_size'] = len(tokenizer.vocab)
+    logger.info(f"Using legacy preprocessing with exhaustive k-mer vocabulary")
+    logger.info(f"Vocabulary size: {len(tokenizer.vocab)}")
+    logger.info(f"Optimal sequence length: {tokenizer.optimal_length} tokens")
     
     # Determine if hierarchical or single-rank
     is_hierarchical = config['model'].get('classification_type', 'single') == 'hierarchical'
