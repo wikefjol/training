@@ -1,0 +1,10 @@
+import pandas as pd
+df = pd.read_csv('/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/experiments/exp1_sequence_fold/full_10fold/data/standard.csv')
+lengths = df['sequence'].str.len()
+print(f'Sequence lengths:')
+print(f'Min: {lengths.min()}')
+print(f'Max: {lengths.max()}')
+print(f'Mean: {lengths.mean():.1f}')
+print(f'95th percentile: {lengths.quantile(0.95):.1f}')
+print(f'99th percentile: {lengths.quantile(0.99):.1f}')
+print(f'Sequences > 1500: {(lengths > 1500).sum()}')
