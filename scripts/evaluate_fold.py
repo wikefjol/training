@@ -338,15 +338,15 @@ def evaluate_fold(fold: int, config: dict, paths: dict, use_best: bool = False, 
                     df[f'pred_{level}_name'] = df[f'pred_{level}'].apply(
                         lambda x: encoder['index_to_label'].get(str(x), 'unknown')
                     )
-                # Convert top-5 indices to names  
+                # Convert top-5 indices to names and serialize as JSON
                 if f'prob_{level}_top5' in df.columns:
                     def convert_top5_to_named(top5_list):
-                        """Convert (prob, idx) tuples to [label_name, probability] format"""
+                        """Convert (prob, idx) tuples to JSON string format for parquet compatibility"""
                         result = []
                         for prob, idx in top5_list:
                             label_name = encoder['index_to_label'].get(str(int(idx)), 'unknown')
-                            result.append([label_name, float(prob)])
-                        return result
+                            result.append({'label': label_name, 'probability': float(prob)})
+                        return json.dumps(result)
                     
                     df[f'prob_{level}_top5'] = df[f'prob_{level}_top5'].apply(convert_top5_to_named)
     else:
@@ -363,12 +363,12 @@ def evaluate_fold(fold: int, config: dict, paths: dict, use_best: bool = False, 
             )
         if f'prob_{level}_top5' in df.columns:
             def convert_top5_to_named_single(top5_list):
-                """Convert (prob, idx) tuples to [label_name, probability] format for single-rank"""
+                """Convert (prob, idx) tuples to JSON string format for single-rank parquet compatibility"""
                 result = []
                 for prob, idx in top5_list:
                     label_name = encoder.get('index_to_label', {}).get(str(int(idx)), 'unknown')
-                    result.append([label_name, float(prob)])
-                return result
+                    result.append({'label': label_name, 'probability': float(prob)})
+                return json.dumps(result)
             
             df[f'prob_{level}_top5'] = df[f'prob_{level}_top5'].apply(convert_top5_to_named_single)
     
