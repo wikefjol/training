@@ -366,6 +366,100 @@ def print_lineage_validation(lineage_results):
     print("• Higher validity indicates better taxonomic consistency")
     print("• Perfect lineage rate should match overall species accuracy")
 
+def analyze_confusion_by_level(results_dict, taxonomic_levels, base_path):
+    """Analyze most confused labels and their top misclassifications per level"""
+    
+    print("\nCONFUSION ANALYSIS BY TAXONOMIC LEVEL")
+    print("=" * 80)
+    
+    for level in taxonomic_levels:
+        print(f"\n{level.upper()} LEVEL:")
+        print("─" * 80)
+        
+        for model_type in ['hierarchical', 'single_ensemble']:
+            model_name = "Hierarchical Model" if model_type == 'hierarchical' else "Single Ensemble Model"
+            print(f"{model_name}:")
+            
+            # Collect all predictions across folds for this model type and level
+            all_true_labels = []
+            all_pred_labels = []
+            
+            for fold in results_dict.keys():
+                # Load the actual parquet file to get individual predictions
+                parquet_file = base_path / f"fold_{fold}" / f"evaluation_results_fold_{fold}_{model_type}.parquet"
+                
+                if parquet_file.exists():
+                    try:
+                        df = pd.read_parquet(parquet_file)
+                        true_col = f'true_{level}_name'
+                        pred_col = f'pred_{level}_name'
+                        
+                        if true_col in df.columns and pred_col in df.columns:
+                            all_true_labels.extend(df[true_col].tolist())
+                            all_pred_labels.extend(df[pred_col].tolist())
+                    except Exception as e:
+                        logger.warning(f"Failed to load {parquet_file}: {e}")
+                        continue
+            
+            if not all_true_labels:
+                print(f"  No data available for {model_type} at {level} level")
+                continue
+            
+            # Find the most confused true label (lowest accuracy)
+            confusion_data = {}
+            for true_label, pred_label in zip(all_true_labels, all_pred_labels):
+                if true_label not in confusion_data:
+                    confusion_data[true_label] = {'correct': 0, 'total': 0, 'misclassifications': {}}
+                
+                confusion_data[true_label]['total'] += 1
+                if true_label == pred_label:
+                    confusion_data[true_label]['correct'] += 1
+                else:
+                    # Track misclassification
+                    if pred_label not in confusion_data[true_label]['misclassifications']:
+                        confusion_data[true_label]['misclassifications'][pred_label] = 0
+                    confusion_data[true_label]['misclassifications'][pred_label] += 1
+            
+            # Find the label with lowest accuracy (most confused)
+            most_confused_label = None
+            lowest_accuracy = 1.0
+            
+            for true_label, data in confusion_data.items():
+                if data['total'] >= 10:  # Only consider labels with at least 10 samples
+                    accuracy = data['correct'] / data['total']
+                    if accuracy < lowest_accuracy:
+                        lowest_accuracy = accuracy
+                        most_confused_label = true_label
+            
+            if most_confused_label is None:
+                print("  No sufficiently frequent labels found")
+                print()
+                continue
+            
+            # Get top-5 misclassifications for the most confused label
+            misclassifications = confusion_data[most_confused_label]['misclassifications']
+            total_samples = confusion_data[most_confused_label]['total']
+            
+            # Sort misclassifications by frequency
+            sorted_misclassifications = sorted(misclassifications.items(), key=lambda x: x[1], reverse=True)
+            top5_misclassifications = sorted_misclassifications[:5]
+            
+            print(f"  True Label: {most_confused_label:<20} (accuracy: {lowest_accuracy*100:5.1f}%)")
+            
+            for i, (pred_label, count) in enumerate(top5_misclassifications, 1):
+                percentage = (count / total_samples) * 100
+                print(f"              {i}. {pred_label:<20}: {count:3d} sequences ({percentage:4.1f}%)")
+            
+            print()
+
+def calculate_confusion_from_parquets(base_path, taxonomic_levels):
+    """Calculate confusion matrices from saved parquet files"""
+    base_path = Path(base_path)
+    
+    # This function would be called if we need to analyze confusion patterns
+    # For now, we'll embed the logic in the main analysis function
+    pass
+
 def main():
     parser = argparse.ArgumentParser(description='Analyze 10-fold cross-validation performance')
     parser.add_argument('--base-path', required=True, type=str,
@@ -453,6 +547,9 @@ def main():
     # Print lineage validation if available
     if lineage_results:
         print_lineage_validation(lineage_results)
+    
+    # Print confusion analysis
+    analyze_confusion_by_level(results_dict, taxonomic_levels, base_path)
     
     print("\n" + "=" * 80)
     print("Analysis complete!")
