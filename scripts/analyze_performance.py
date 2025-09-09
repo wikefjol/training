@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 Performance Analysis Script for 10-Fold Cross-Validation Results
-Generates adaptive heatmaps and statistical comparisons between hierarchical and single-rank ensemble models.
+Generates heatmaps, statistical comparisons, and lineage validation analysis.
 
 Usage:
     python scripts/analyze_performance.py --base-path /path/to/experiment/models/standard
-    python scripts/analyze_performance.py --base-path /mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/experiments/exp1_sequence_fold/debug_5genera_10fold/models/standard
+    python scripts/analyze_performance.py --base-path /path/to/experiment/models/standard --lineage-ref /path/to/experiment/data
 """
 
 import argparse
@@ -15,6 +15,7 @@ from pathlib import Path
 import sys
 from scipy.stats import ttest_rel
 import logging
+import pickle
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -50,39 +51,86 @@ def calculate_accuracy(df, level):
         
     return (df[true_col] == df[pred_col]).mean()
 
-def get_data_driven_thresholds(values):
-    """Get adaptive color thresholds based on data distribution"""
-    values = np.array(values)
-    values = values[~np.isnan(values)]  # Remove NaN values
-    
-    if len(values) == 0:
-        return [0, 0.25, 0.5, 0.75, 1.0]
-    
-    # Use quintiles for maximum resolution
-    return np.percentile(values, [0, 20, 40, 60, 80, 100])
-
+def get_fixed_thresholds(level):
+    """Get interpretable fixed thresholds based on taxonomic level"""
+    # Use meaningful, interpretable thresholds
+    if level in ['phylum', 'class']:
+        return [50, 70, 85, 95, 100]  # Very high accuracy expected
+    elif level in ['order', 'family']:
+        return [30, 50, 70, 85, 100]  # Moderate accuracy expected  
+    else:  # genus, species
+        return [5, 15, 30, 50, 100]   # Lower accuracy expected
+        
 def value_to_symbol(value, thresholds):
-    """Convert accuracy value to visual symbol based on thresholds"""
+    """Convert accuracy value to visual symbol based on fixed thresholds"""
     if np.isnan(value):
         return '?'
     
     if value >= thresholds[4]:
-        return '■'  # Top 20%
+        return '■'  # Excellent (>95%, >85%, >50%)
     elif value >= thresholds[3]:
-        return '▓'  # 60-80%
+        return '▓'  # Very Good (85-95%, 70-85%, 30-50%) 
     elif value >= thresholds[2]:
-        return '▒'  # 40-60%
+        return '▒'  # Good (70-85%, 50-70%, 15-30%)
     elif value >= thresholds[1]:
-        return '░'  # 20-40%
+        return '░'  # Fair (50-70%, 30-50%, 5-15%)
     else:
-        return '·'  # Bottom 20%
+        return '·'  # Poor (<50%, <30%, <5%)
+
+def load_lineage_reference(lineage_ref_dir):
+    """Load lineage reference set for validation"""
+    lineage_ref_path = Path(lineage_ref_dir)
+    pickle_path = lineage_ref_path / "valid_lineages_set.pkl"
+    
+    if not pickle_path.exists():
+        logger.warning(f"Lineage reference not found: {pickle_path}")
+        return None, []
+    
+    try:
+        with open(pickle_path, 'rb') as f:
+            data = pickle.load(f)
+            return data['lineage_set'], data['taxonomic_levels']
+    except Exception as e:
+        logger.error(f"Failed to load lineage reference: {e}")
+        return None, []
+
+def calculate_lineage_validity(df, valid_lineages_set, taxonomic_levels):
+    """Calculate what percentage of predictions form valid lineages"""
+    if valid_lineages_set is None:
+        return np.nan, np.nan
+    
+    total_predictions = len(df)
+    if total_predictions == 0:
+        return np.nan, np.nan
+    
+    valid_count = 0
+    accurate_count = 0
+    
+    for _, row in df.iterrows():
+        # Get predicted lineage
+        pred_lineage = tuple(row[f'pred_{level}_name'] for level in taxonomic_levels)
+        # Get true lineage  
+        true_lineage = tuple(row[f'true_{level}_name'] for level in taxonomic_levels)
+        
+        # Check if predicted lineage is valid
+        if pred_lineage in valid_lineages_set:
+            valid_count += 1
+        
+        # Check if predicted lineage is exactly correct
+        if pred_lineage == true_lineage:
+            accurate_count += 1
+    
+    validity_rate = valid_count / total_predictions
+    accuracy_rate = accurate_count / total_predictions
+    
+    return validity_rate, accuracy_rate
 
 def print_performance_heatmap(results_dict, taxonomic_levels):
-    """Print adaptive performance heatmap"""
+    """Print performance heatmap with interpretable thresholds"""
     
     print("\nPERFORMANCE HEATMAP (Accuracy %)")
-    print("■ = Top 20%  ▓ = 60-80%  ▒ = 40-60%  ░ = 20-40%  · = Bottom 20%")
-    print("Thresholds are adaptive per taxonomic level for maximum resolution")
+    print("■ = Excellent  ▓ = Very Good  ▒ = Good  ░ = Fair  · = Poor")
+    print("Thresholds are fixed per taxonomic level for interpretability")
     print()
     
     # Header
@@ -91,12 +139,11 @@ def print_performance_heatmap(results_dict, taxonomic_levels):
     print("     ┌" + "─" * (len(header) - 6) + "┐")
     
     for level in taxonomic_levels:
-        # Get all values for this level to calculate thresholds
+        thresholds = get_fixed_thresholds(level)
+        
+        # Get values for this level
         all_hier_values = [results_dict[f][level]['hierarchical'] for f in range(1, 11)]
         all_ensemble_values = [results_dict[f][level]['single_ensemble'] for f in range(1, 11)]
-        all_values = all_hier_values + all_ensemble_values
-        
-        thresholds = get_data_driven_thresholds(all_values)
         
         # Calculate statistics
         hier_mean = np.nanmean(all_hier_values)
@@ -235,10 +282,87 @@ def print_trend_visualization(results_dict, taxonomic_levels):
             
             print(f"{level.title():<8} {hier_bar:<20} {hier_mean:5.1f}% vs {ensemble_bar:<20} {ensemble_mean:5.1f}%")
 
+def print_lineage_validation(lineage_results):
+    """Print lineage validation analysis"""
+    
+    print("\nLINEAGE VALIDATION ANALYSIS")
+    print("=" * 80)
+    
+    if not lineage_results:
+        print("⚠️  No lineage validation data available")
+        print("   Run: python scripts/create_lineage_reference.py --data-path /path/to/data.csv --output-dir /path/to/output")
+        return
+    
+    # Summary table
+    print("Taxonomic Consistency Metrics:")
+    print("─" * 80)
+    header = f"{'Fold':<6} │ {'Model':<15} │ {'Valid Lineages':<15} │ {'Perfect Lineages':<16} │ {'Samples':<8}"
+    print(header)
+    print("─" * len(header))
+    
+    for fold in sorted(lineage_results.keys()):
+        for model_type in ['hierarchical', 'single_ensemble']:
+            if model_type in lineage_results[fold]:
+                validity, accuracy, samples = lineage_results[fold][model_type]
+                model_name = "Hierarchical" if model_type == 'hierarchical' else "Single Ensemble"
+                
+                if not np.isnan(validity):
+                    print(f"F{fold:<5} │ {model_name:<15} │ {validity*100:6.1f}%        │ {accuracy*100:7.1f}%         │ {samples:<8}")
+    
+    # Summary statistics
+    print("\n" + "─" * 80)
+    print("OVERALL SUMMARY:")
+    
+    # Calculate means
+    hier_validities = []
+    hier_accuracies = []
+    ens_validities = []
+    ens_accuracies = []
+    
+    for fold in lineage_results:
+        if 'hierarchical' in lineage_results[fold]:
+            v, a, _ = lineage_results[fold]['hierarchical']
+            if not np.isnan(v):
+                hier_validities.append(v * 100)
+                hier_accuracies.append(a * 100)
+        
+        if 'single_ensemble' in lineage_results[fold]:
+            v, a, _ = lineage_results[fold]['single_ensemble']
+            if not np.isnan(v):
+                ens_validities.append(v * 100)
+                ens_accuracies.append(a * 100)
+    
+    if hier_validities and ens_validities:
+        print(f"Valid Lineages    - Hierarchical: {np.mean(hier_validities):5.1f}±{np.std(hier_validities):4.1f}%")
+        print(f"                  - Single Ensemble: {np.mean(ens_validities):5.1f}±{np.std(ens_validities):4.1f}%")
+        
+        print(f"Perfect Lineages  - Hierarchical: {np.mean(hier_accuracies):5.1f}±{np.std(hier_accuracies):4.1f}%")
+        print(f"                  - Single Ensemble: {np.mean(ens_accuracies):5.1f}±{np.std(ens_accuracies):4.1f}%")
+        
+        # Statistical tests
+        if len(hier_validities) >= 3 and len(ens_validities) >= 3:
+            try:
+                _, p_val_validity = ttest_rel(hier_validities, ens_validities)
+                _, p_val_accuracy = ttest_rel(hier_accuracies, ens_accuracies)
+                
+                print(f"\nStatistical Significance:")
+                print(f"Valid Lineages Difference: p = {p_val_validity:.4f}")
+                print(f"Perfect Lineages Difference: p = {p_val_accuracy:.4f}")
+            except:
+                pass
+    
+    print("\n📊 Key Insights:")
+    print("• Valid Lineages: % of predictions that form biologically consistent taxonomic paths")
+    print("• Perfect Lineages: % of predictions where entire taxonomic path is exactly correct")
+    print("• Higher validity indicates better taxonomic consistency")
+    print("• Perfect lineage rate should match overall species accuracy")
+
 def main():
     parser = argparse.ArgumentParser(description='Analyze 10-fold cross-validation performance')
     parser.add_argument('--base-path', required=True, type=str,
                       help='Base path to experiment models directory (e.g., /path/to/models/standard)')
+    parser.add_argument('--lineage-ref', type=str,
+                      help='Path to lineage reference directory (optional, enables lineage validation)')
     parser.add_argument('--folds', nargs='+', type=int, default=list(range(1, 11)),
                       help='Folds to analyze (default: 1-10)')
     parser.add_argument('--levels', nargs='+', type=str, 
@@ -254,8 +378,17 @@ def main():
     
     logger.info(f"Loading results from: {base_path}")
     
+    # Load lineage reference if provided
+    valid_lineages_set = None
+    lineage_taxonomic_levels = []
+    if args.lineage_ref:
+        valid_lineages_set, lineage_taxonomic_levels = load_lineage_reference(args.lineage_ref)
+        if valid_lineages_set:
+            logger.info(f"Loaded {len(valid_lineages_set)} valid lineages for validation")
+    
     # Load all results
     results_dict = {}
+    lineage_results = {}
     taxonomic_levels = args.levels
     
     for fold in args.folds:
@@ -266,6 +399,7 @@ def main():
             continue
         
         results_dict[fold] = {}
+        lineage_results[fold] = {}
         
         for level in taxonomic_levels:
             hier_acc = calculate_accuracy(hier_df, level)
@@ -275,6 +409,20 @@ def main():
                 'hierarchical': hier_acc * 100,  # Convert to percentage
                 'single_ensemble': ensemble_acc * 100
             }
+        
+        # Calculate lineage validation if reference is available
+        if valid_lineages_set and lineage_taxonomic_levels:
+            # Hierarchical lineage validation
+            hier_validity, hier_accuracy = calculate_lineage_validity(
+                hier_df, valid_lineages_set, lineage_taxonomic_levels
+            )
+            lineage_results[fold]['hierarchical'] = (hier_validity, hier_accuracy, len(hier_df))
+            
+            # Ensemble lineage validation
+            ens_validity, ens_accuracy = calculate_lineage_validity(
+                ensemble_df, valid_lineages_set, lineage_taxonomic_levels
+            )
+            lineage_results[fold]['single_ensemble'] = (ens_validity, ens_accuracy, len(ensemble_df))
     
     if not results_dict:
         logger.error("No valid results found")
@@ -292,6 +440,10 @@ def main():
     print_performance_heatmap(results_dict, taxonomic_levels)
     print_trend_visualization(results_dict, taxonomic_levels)
     print_summary_table(results_dict, taxonomic_levels)
+    
+    # Print lineage validation if available
+    if lineage_results:
+        print_lineage_validation(lineage_results)
     
     print("\n" + "=" * 80)
     print("Analysis complete!")
