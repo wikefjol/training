@@ -191,6 +191,64 @@ class SequenceClassificationModel(nn.Module):
         """Count trainable parameters"""
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
     
+    def _map_pretrained_key(self, pretrained_key: str) -> str:
+        """
+        Map HuggingFace BERT parameter names to our custom model names.
+        
+        Args:
+            pretrained_key: Key from pretrained model (HuggingFace format)
+            
+        Returns:
+            Corresponding key in our model, or None if not mappable
+        """
+        # HuggingFace -> Our model key mappings
+        key_mappings = {
+            # Embeddings
+            'bert.embeddings.word_embeddings.weight': 'word_embeddings.weight',
+            'bert.embeddings.position_embeddings.weight': 'position_embeddings.weight',
+            'bert.embeddings.LayerNorm.weight': 'embedding_layer_norm.weight',
+            'bert.embeddings.LayerNorm.bias': 'embedding_layer_norm.bias',
+        }
+        
+        # Direct mapping first
+        if pretrained_key in key_mappings:
+            return key_mappings[pretrained_key]
+        
+        # Pattern-based mapping for transformer layers
+        if pretrained_key.startswith('bert.encoder.layer.'):
+            # Extract layer number and component path
+            parts = pretrained_key.split('.')
+            if len(parts) >= 6:
+                layer_num = parts[3]  # bert.encoder.layer.{N}
+                component_path = '.'.join(parts[4:])  # attention.self.key.weight, etc.
+                
+                # Map component paths
+                component_mappings = {
+                    # Self-attention
+                    'attention.self.query.weight': 'attention.query.weight',
+                    'attention.self.query.bias': 'attention.query.bias',
+                    'attention.self.key.weight': 'attention.key.weight',
+                    'attention.self.key.bias': 'attention.key.bias', 
+                    'attention.self.value.weight': 'attention.value.weight',
+                    'attention.self.value.bias': 'attention.value.bias',
+                    'attention.output.dense.weight': 'attention_output.weight',
+                    'attention.output.dense.bias': 'attention_output.bias',
+                    'attention.output.LayerNorm.weight': 'attention_layer_norm.weight',
+                    'attention.output.LayerNorm.bias': 'attention_layer_norm.bias',
+                    # Feed-forward
+                    'intermediate.dense.weight': 'intermediate.weight',
+                    'intermediate.dense.bias': 'intermediate.bias',
+                    'output.dense.weight': 'output.weight',
+                    'output.dense.bias': 'output.bias',
+                    'output.LayerNorm.weight': 'output_layer_norm.weight',
+                    'output.LayerNorm.bias': 'output_layer_norm.bias',
+                }
+                
+                if component_path in component_mappings:
+                    return f'transformer_blocks.{layer_num}.{component_mappings[component_path]}'
+        
+        return None
+
     def load_pretrained_backbone(self, pretrained_path: str):
         """
         Load pretrained backbone weights (embeddings and transformer blocks)
@@ -222,36 +280,43 @@ class SequenceClassificationModel(nn.Module):
             # Track what gets loaded
             loaded_keys = []
             skipped_keys = []
+            mapped_keys = []
             
             # Load matching backbone weights (exclude classification heads)
-            for key, value in pretrained_state_dict.items():
+            for pretrained_key, value in pretrained_state_dict.items():
                 # Skip classification head weights (these should be randomly initialized)
-                if key.startswith('classifier.') or key.startswith('head.'):
-                    skipped_keys.append(key)
+                if (pretrained_key.startswith('classifier.') or 
+                    pretrained_key.startswith('head.') or
+                    pretrained_key.startswith('bert.pooler.')):
+                    skipped_keys.append(pretrained_key)
                     continue
                 
-                # Load if key exists and shapes match
-                if key in current_state_dict:
-                    if current_state_dict[key].shape == value.shape:
-                        current_state_dict[key] = value
-                        loaded_keys.append(key)
+                # Map HuggingFace key to our model key
+                mapped_key = self._map_pretrained_key(pretrained_key)
+                
+                if mapped_key and mapped_key in current_state_dict:
+                    if current_state_dict[mapped_key].shape == value.shape:
+                        current_state_dict[mapped_key] = value
+                        loaded_keys.append(mapped_key)
+                        mapped_keys.append(f"{pretrained_key} -> {mapped_key}")
                     else:
-                        logger.warning(f"Shape mismatch for {key}: "
-                                     f"current={current_state_dict[key].shape}, "
+                        logger.warning(f"Shape mismatch for {pretrained_key} -> {mapped_key}: "
+                                     f"current={current_state_dict[mapped_key].shape}, "
                                      f"pretrained={value.shape}")
-                        skipped_keys.append(key)
+                        skipped_keys.append(pretrained_key)
                 else:
-                    skipped_keys.append(key)
+                    skipped_keys.append(pretrained_key)
             
             # Load the updated state dict
             self.load_state_dict(current_state_dict)
             
             logger.info(f"✅ Loaded pretrained backbone: {len(loaded_keys)} layers loaded")
             logger.info(f"📋 Loaded components: {', '.join(loaded_keys[:5])}{'...' if len(loaded_keys) > 5 else ''}")
+            logger.info(f"🔗 Key mappings: {len(mapped_keys)} successful")
             logger.info(f"🎯 Classification heads: randomly initialized (as expected)")
             
             if skipped_keys:
-                logger.info(f"⏭️  Skipped {len(skipped_keys)} keys (classification heads or mismatched shapes)")
+                logger.info(f"⏭️  Skipped {len(skipped_keys)} keys (classification heads or unmappable)")
                 
         except Exception as e:
             raise RuntimeError(f"Failed to load pretrained model: {e}")
