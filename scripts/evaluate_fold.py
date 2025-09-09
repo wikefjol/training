@@ -163,9 +163,10 @@ def run_inference(model, data_loader, device, is_hierarchical: bool, taxonomic_l
                         # Get top-5 probabilities with indices
                         level_probs = probabilities[j][i]
                         top5_probs, top5_indices = torch.topk(level_probs, min(5, len(level_probs)))
+                        # Store as list of [probability, index] for later label name conversion
                         sample_result[f'prob_{level}_top5'] = list(zip(
-                            top5_probs.cpu().numpy().astype(str),
-                            top5_indices.cpu().numpy().astype(str)
+                            top5_probs.cpu().numpy(),
+                            top5_indices.cpu().numpy()
                         ))
                     
                     results.append(sample_result)
@@ -190,9 +191,10 @@ def run_inference(model, data_loader, device, is_hierarchical: bool, taxonomic_l
                     # Get top-5 probabilities
                     sample_probs = probabilities[i]
                     top5_probs, top5_indices = torch.topk(sample_probs, min(5, len(sample_probs)))
+                    # Store as list of [probability, index] for later label name conversion
                     sample_result[f'prob_{level}_top5'] = list(zip(
-                        top5_probs.cpu().numpy().astype(str),
-                        top5_indices.cpu().numpy().astype(str)
+                        top5_probs.cpu().numpy(),
+                        top5_indices.cpu().numpy()
                     ))
                     
                     results.append(sample_result)
@@ -336,12 +338,17 @@ def evaluate_fold(fold: int, config: dict, paths: dict, use_best: bool = False, 
                     df[f'pred_{level}_name'] = df[f'pred_{level}'].apply(
                         lambda x: encoder['index_to_label'].get(str(x), 'unknown')
                     )
-                # Convert top-5 indices to names
+                # Convert top-5 indices to names  
                 if f'prob_{level}_top5' in df.columns:
-                    df[f'prob_{level}_top5'] = df[f'prob_{level}_top5'].apply(
-                        lambda top5: [[prob, encoder['index_to_label'].get(str(idx), 'unknown')] 
-                                     for prob, idx in top5]
-                    )
+                    def convert_top5_to_named(top5_list):
+                        """Convert (prob, idx) tuples to [label_name, probability] format"""
+                        result = []
+                        for prob, idx in top5_list:
+                            label_name = encoder['index_to_label'].get(str(int(idx)), 'unknown')
+                            result.append([label_name, float(prob)])
+                        return result
+                    
+                    df[f'prob_{level}_top5'] = df[f'prob_{level}_top5'].apply(convert_top5_to_named)
     else:
         level = taxonomic_levels[0] if taxonomic_levels else 'species'
         encoder = encoder_dicts.get(level, encoder_dicts.get('species', {}))
@@ -355,10 +362,15 @@ def evaluate_fold(fold: int, config: dict, paths: dict, use_best: bool = False, 
                 lambda x: encoder.get('index_to_label', {}).get(str(x), 'unknown')
             )
         if f'prob_{level}_top5' in df.columns:
-            df[f'prob_{level}_top5'] = df[f'prob_{level}_top5'].apply(
-                lambda top5: [[prob, encoder.get('index_to_label', {}).get(str(idx), 'unknown')] 
-                             for prob, idx in top5]
-            )
+            def convert_top5_to_named_single(top5_list):
+                """Convert (prob, idx) tuples to [label_name, probability] format for single-rank"""
+                result = []
+                for prob, idx in top5_list:
+                    label_name = encoder.get('index_to_label', {}).get(str(int(idx)), 'unknown')
+                    result.append([label_name, float(prob)])
+                return result
+            
+            df[f'prob_{level}_top5'] = df[f'prob_{level}_top5'].apply(convert_top5_to_named_single)
     
     # Save results
     if output_dir:
