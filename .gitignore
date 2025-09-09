@@ -43,3 +43,6 @@ all_folds_results.json
 *.swo
 *~
 .DS_Store
+
+# Reference files
+old_files_for_context/
