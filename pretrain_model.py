@@ -126,11 +126,14 @@ def pretrain_model(config_path: str, paths: dict):
     logger.info(f"Model created with {trainable_params:,} trainable parameters "
                 f"({total_params:,} total)")
     
-    # Create output directory
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    dataset_size = config['experiment']['dataset_size']
-    output_dir = Path(paths['models_dir']) / 'pretraining' / f"{dataset_size}_{timestamp}"
+    # Create output directory in experiment structure
+    experiment_base = Path(paths['experiments_dir']) / config['experiment']['fold_type'] / \
+                      config['experiment']['dataset_size']
+    
+    output_dir = experiment_base / 'models' / config['experiment']['union_type'] / 'pretrained_model'
     output_dir.mkdir(parents=True, exist_ok=True)
+    
+    logger.info(f"Saving pretrained model to: {output_dir}")
     
     # Save config
     config_path = output_dir / 'config.yaml'

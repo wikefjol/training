@@ -457,10 +457,9 @@ def create_model(vocab_size: int, num_classes: Union[int, List[int]], config: Di
     )
     
     # Handle pretrained weights loading
-    pretrained_path = config.get('pretrained_model_path')
-    
     if mode == "pretrain":
-        # For pretraining, pretrained path is optional
+        # For pretraining, pretrained path is optional (can start from scratch or continue)
+        pretrained_path = config.get('pretrained_model_path')
         if pretrained_path and os.path.exists(pretrained_path):
             logger.info(f"Loading pretrained backbone from: {pretrained_path}")
             model.load_pretrained_backbone(pretrained_path)
@@ -468,19 +467,37 @@ def create_model(vocab_size: int, num_classes: Union[int, List[int]], config: Di
             logger.info("No pretrained model specified for pretraining - training from scratch")
             
     elif mode == "classify":
-        # For classification, pretrained path is required
-        if not pretrained_path:
-            raise ValueError(
-                "No pretrained_model_path specified in config. "
-                "Training from scratch is not allowed to prevent wasting compute resources. "
-                "Please add pretrained_model_path to your config file."
-            )
+        # For classification, automatically resolve pretrained model path from experiment structure
+        pretrained_path = config.get('pretrained_model_path')
         
+        # If no explicit path provided, auto-resolve from experiment config
+        if not pretrained_path:
+            from pathlib import Path
+            import os
+            
+            # Build experiment path
+            experiments_dir = os.path.expandvars(os.getenv('EXPERIMENTS_DIR'))
+            experiment_base = Path(experiments_dir) / config['experiment']['fold_type'] / \
+                              config['experiment']['dataset_size']
+            
+            auto_pretrained_path = experiment_base / 'models' / config['experiment']['union_type'] / \
+                                   'pretrained_model' / 'best_pretrained_model.pt'
+            
+            if auto_pretrained_path.exists():
+                pretrained_path = str(auto_pretrained_path)
+                logger.info(f"Auto-resolved pretrained model path: {pretrained_path}")
+            else:
+                raise FileNotFoundError(
+                    f"No pretrained model found at expected location: {auto_pretrained_path}\n"
+                    "Please run pretraining first or specify pretrained_model_path in config."
+                )
+        
+        # Verify path exists  
         if not os.path.exists(pretrained_path):
             raise FileNotFoundError(
                 f"Pretrained model not found: {pretrained_path}\n"
                 "Training cannot continue without pretrained weights. "
-                "Please verify the file exists and the path is correct."
+                "Please verify the file exists and run pretraining if needed."
             )
         
         logger.info(f"Loading pretrained backbone from: {pretrained_path}")
