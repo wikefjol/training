@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+import os
 from typing import Optional, Dict, List, Union
 import logging
 try:
@@ -190,6 +191,73 @@ class SequenceClassificationModel(nn.Module):
         """Count trainable parameters"""
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
     
+    def load_pretrained_backbone(self, pretrained_path: str):
+        """
+        Load pretrained backbone weights (embeddings and transformer blocks)
+        while keeping randomly initialized classification heads.
+        
+        Args:
+            pretrained_path: Path to pretrained model checkpoint (.pt file)
+        """
+        if not os.path.exists(pretrained_path):
+            raise FileNotFoundError(f"Pretrained model not found at: {pretrained_path}")
+        
+        logger.info(f"Loading pretrained backbone from: {pretrained_path}")
+        
+        try:
+            # Load pretrained checkpoint
+            checkpoint = torch.load(pretrained_path, map_location='cpu')
+            
+            # Handle different checkpoint formats
+            if 'model_state_dict' in checkpoint:
+                pretrained_state_dict = checkpoint['model_state_dict']
+            elif 'state_dict' in checkpoint:
+                pretrained_state_dict = checkpoint['state_dict']
+            else:
+                pretrained_state_dict = checkpoint
+            
+            # Get current model state dict
+            current_state_dict = self.state_dict()
+            
+            # Track what gets loaded
+            loaded_keys = []
+            skipped_keys = []
+            
+            # Load matching backbone weights (exclude classification heads)
+            for key, value in pretrained_state_dict.items():
+                # Skip classification head weights (these should be randomly initialized)
+                if key.startswith('classifier.') or key.startswith('head.'):
+                    skipped_keys.append(key)
+                    continue
+                
+                # Load if key exists and shapes match
+                if key in current_state_dict:
+                    if current_state_dict[key].shape == value.shape:
+                        current_state_dict[key] = value
+                        loaded_keys.append(key)
+                    else:
+                        logger.warning(f"Shape mismatch for {key}: "
+                                     f"current={current_state_dict[key].shape}, "
+                                     f"pretrained={value.shape}")
+                        skipped_keys.append(key)
+                else:
+                    skipped_keys.append(key)
+            
+            # Load the updated state dict
+            self.load_state_dict(current_state_dict)
+            
+            logger.info(f"✅ Loaded pretrained backbone: {len(loaded_keys)} layers loaded")
+            logger.info(f"📋 Loaded components: {', '.join(loaded_keys[:5])}{'...' if len(loaded_keys) > 5 else ''}")
+            logger.info(f"🎯 Classification heads: randomly initialized (as expected)")
+            
+            if skipped_keys:
+                logger.info(f"⏭️  Skipped {len(skipped_keys)} keys (classification heads or mismatched shapes)")
+                
+        except Exception as e:
+            raise RuntimeError(f"Failed to load pretrained model: {e}")
+        
+        return self
+    
     def forward(self, input_ids, attention_mask=None):
         """
         Forward pass
@@ -261,6 +329,25 @@ def create_model(vocab_size: int, num_classes: Union[int, List[int]], config: Di
         hierarchical=is_hierarchical,
         hierarchical_dropout=model_config.get('hierarchical_dropout', 0.3)
     )
+    
+    # Load pretrained backbone weights - REQUIRED for all training
+    pretrained_path = config.get('pretrained_model_path')
+    if not pretrained_path:
+        raise ValueError(
+            "No pretrained_model_path specified in config. "
+            "Training from scratch is not allowed to prevent wasting compute resources. "
+            "Please add pretrained_model_path to your config file."
+        )
+    
+    if not os.path.exists(pretrained_path):
+        raise FileNotFoundError(
+            f"Pretrained model not found: {pretrained_path}\n"
+            "Training cannot continue without pretrained weights. "
+            "Please verify the file exists and the path is correct."
+        )
+    
+    logger.info(f"Loading pretrained backbone from: {pretrained_path}")
+    model.load_pretrained_backbone(pretrained_path)
     
     # Add uncertainty weighting parameters if specified
     if is_hierarchical and model_config.get('use_uncertainty_weighting', False):

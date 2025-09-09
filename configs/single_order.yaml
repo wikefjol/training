@@ -1,6 +1,9 @@
 # Full-scale single-rank model configuration - Order level
 # Predicts only order classification
 
+# Pretrained model
+pretrained_model_path: "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/pretrained_model/best_pretrained_model.pt"
+
 experiment:
   union_type: "standard"  # a+b+d
   fold_type: "exp1_sequence_fold"
