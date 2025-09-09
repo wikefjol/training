@@ -16,6 +16,7 @@ import sys
 from scipy.stats import ttest_rel
 import logging
 import pickle
+from datetime import datetime
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -460,6 +461,23 @@ def calculate_confusion_from_parquets(base_path, taxonomic_levels):
     # For now, we'll embed the logic in the main analysis function
     pass
 
+class TeeOutput:
+    """Class to duplicate output to both terminal and file"""
+    def __init__(self, file_path):
+        self.terminal = sys.stdout
+        self.log_file = open(file_path, 'w', encoding='utf-8')
+    
+    def write(self, message):
+        self.terminal.write(message)
+        self.log_file.write(message)
+    
+    def flush(self):
+        self.terminal.flush()
+        self.log_file.flush()
+    
+    def close(self):
+        self.log_file.close()
+
 def main():
     parser = argparse.ArgumentParser(description='Analyze 10-fold cross-validation performance')
     parser.add_argument('--base-path', required=True, type=str,
@@ -471,6 +489,8 @@ def main():
     parser.add_argument('--levels', nargs='+', type=str, 
                       default=['phylum', 'class', 'order', 'family', 'genus', 'species'],
                       help='Taxonomic levels to analyze')
+    parser.add_argument('--save-output', type=str,
+                      help='Save analysis output to text file (optional)')
     
     args = parser.parse_args()
     
@@ -478,6 +498,21 @@ def main():
     if not base_path.exists():
         logger.error(f"Base path does not exist: {base_path}")
         sys.exit(1)
+    
+    # Setup output redirection if requested
+    tee_output = None
+    if args.save_output:
+        output_file = args.save_output
+        # Auto-generate filename if just directory provided
+        if Path(output_file).is_dir():
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            experiment_name = base_path.name
+            output_file = Path(output_file) / f"performance_analysis_{experiment_name}_{timestamp}.txt"
+        
+        tee_output = TeeOutput(output_file)
+        sys.stdout = tee_output
+        print(f"Analysis output will be saved to: {output_file}")
+        print("=" * 80)
     
     logger.info(f"Loading results from: {base_path}")
     
@@ -536,6 +571,7 @@ def main():
     # Generate visualizations
     print(f"\nPERFORMANCE ANALYSIS: {base_path.name.upper()}")
     print("=" * 80)
+    print(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Experiment path: {base_path}")
     print(f"Folds analyzed: {sorted(results_dict.keys())}")
     print(f"Taxonomic levels: {', '.join(taxonomic_levels)}")
@@ -552,7 +588,13 @@ def main():
     analyze_confusion_by_level(results_dict, taxonomic_levels, base_path)
     
     print("\n" + "=" * 80)
-    print("Analysis complete!")
+    print(f"Analysis complete! Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    # Clean up output redirection
+    if tee_output:
+        sys.stdout = tee_output.terminal  # Restore original stdout
+        tee_output.close()
+        print(f"\nAnalysis saved to: {output_file}")
 
 if __name__ == "__main__":
     main()
