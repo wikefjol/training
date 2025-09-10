@@ -22,7 +22,7 @@ from tqdm import tqdm
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.data import load_fold_data, prepare_data_for_training, create_data_loaders, LabelEncoder
-from src.preprocessing import KmerTokenizer
+from src.legacy_preprocessing import LegacyTokenizer
 from src.model import create_model
 
 # Setup logging
@@ -242,13 +242,23 @@ def evaluate_fold(fold: int, config: dict, paths: dict, use_best: bool = False, 
     with open(encoder_path, 'r') as f:
         encoder_dicts = json.load(f)
     
-    # Create tokenizer
+    # Create legacy tokenizer (must match training)
     logger.info("Building tokenizer...")
-    tokenizer = KmerTokenizer(k=config['preprocessing']['kmer_size'], stride=config['preprocessing']['stride'])
+    # Calculate optimal_length: max_length (bases) / kmer_size = tokens
+    optimal_length = config['preprocessing']['max_length'] // config['preprocessing']['kmer_size']
     
-    # Update vocab size in config
-    if hasattr(tokenizer, 'vocab'):
-        config['model']['vocab_size'] = len(tokenizer.vocab)
+    tokenizer = LegacyTokenizer(
+        k=config['preprocessing']['kmer_size'],
+        optimal_length=optimal_length,
+        modification_probability=config['preprocessing']['base_modification_probability'],
+        alphabet=config['preprocessing']['alphabet']
+    )
+    
+    # Update vocab size in config  
+    config['model']['vocab_size'] = len(tokenizer.vocab)
+    logger.info(f"Using legacy preprocessing with exhaustive k-mer vocabulary")
+    logger.info(f"Vocabulary size: {len(tokenizer.vocab)}")
+    logger.info(f"Optimal sequence length: {tokenizer.optimal_length} tokens")
     
     # Determine if hierarchical or single-rank
     is_hierarchical = config['model'].get('classification_type', 'single') == 'hierarchical'
