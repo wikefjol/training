@@ -1,13 +1,13 @@
 #!/bin/env bash
-# Test script for timing a single hierarchical model training
-# Usage: sbatch scripts/test_single_hierarchical.sh
+# Usage: sbatch finetune_model.sh <config_file> <hours>
+# Example: sbatch finetune_model.sh configs/finetuning_5mer_config.json 12
 
-#SBATCH -A NAISS2024-22-976
+#SBATCH -A NAISS2025-22-110
 #SBATCH -p alvis
 #SBATCH --gpus-per-node=A100fat:1
 #SBATCH -t 0-16:00:00
-#SBATCH -J test_hierarchical
-#SBATCH -o /cephyr/users/filbern/Alvis/workspace/training/sbatch_logs/test_hierarchical_%j.out
+#SBATCH -J ft_model
+#SBATCH -o /cephyr/users/filbern/Alvis/workspace/training/sbatch_logs/finetune_test_hierarchical/%x_%j.out
 
 # Load modules
 ml purge
